@@ -1,0 +1,10 @@
+*.py[cod]
+
+.pylintrc
+.python-version
+Pipfile.lock
+build/*
+dist/*
+docs/build/*
+docs/coverage/*
+docs/html/*
