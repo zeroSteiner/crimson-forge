@@ -11,6 +11,8 @@ networkx = "*"
 pyvex = "*"
 graphviz = "*"
 tabulate = "*"
+termcolor = "*"
+boltons = "*"
 
 [dev-packages]
 ipython = "*"

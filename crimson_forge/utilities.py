@@ -30,6 +30,50 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import termcolor
+
+print_colors = True
+
+def print_error(message):
+	"""
+	Print an error message to the console.
+	:param str message: The message to print
+	"""
+	prefix = '[-] '
+	if print_colors:
+		prefix = termcolor.colored(prefix, 'red', attrs=['bold'])
+	print(prefix + message)
+
+def print_good(message):
+	"""
+	Print a good message to the console.
+	:param str message: The message to print
+	"""
+	prefix = '[+] '
+	if print_colors:
+		prefix = termcolor.colored(prefix, 'green', attrs=['bold'])
+	print(prefix + message)
+
+def print_status(message):
+	"""
+	Print a status message to the console.
+	:param str message: The message to print
+	"""
+	prefix = '[*] '
+	if print_colors:
+		prefix = termcolor.colored(prefix, 'blue', attrs=['bold'])
+	print(prefix + message)
+
+def print_warning(message):
+	"""
+	Print a warning message to the console.
+	:param str message: The message to print
+	"""
+	prefix = '[!] '
+	if print_colors:
+		prefix = termcolor.colored(prefix, 'yellow', attrs=['bold'])
+	print(prefix + message)
+
 def remove_comments(source, comment_char=';'):
 	"""Remove comments from assembly source."""
 	# todo: this should use a regex incase theres a ';' in the source

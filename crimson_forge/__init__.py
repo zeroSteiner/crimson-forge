@@ -35,3 +35,4 @@ __version__ = '0.1.0'
 from .binary import Binary
 from .block import BasicBlock
 from .instruction import Instruction
+from .utilities import print_error, print_good, print_status, print_warning
