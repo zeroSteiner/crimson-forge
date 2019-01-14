@@ -135,20 +135,22 @@ class BasicBlock(base.Base):
 						constraints[o_ins].append(ins)
 						break
 
-		for child, dependencies in constraints.items():
-			for parent in dependencies:
-				graph.add_edge(parent, child)
+		nodes_with_parents = set(itertools.chain(*constraints.values()))
+		leaf_nodes = set(ins for ins in self.instructions.values() if ins not in nodes_with_parents)
 
 		ins_ptr = ir.IRRegister.from_arch(self.arch, 'ip')
-		leaf_nodes = set(self.instructions.values()) - set(itertools.chain(*constraints.values()))
 		exit_node = next((ins for ins in leaf_nodes if ins_ptr in ins.registers.modified), None)
 		if exit_node is not None:
 			leaf_nodes.remove(exit_node)
 			for leaf_node in leaf_nodes:
-				self._connect_leaf_to_exit(graph, leaf_node, exit_node)
+				constraints[self._exit_for_leaf(leaf_node, exit_node)].append(leaf_node)
+
+		for child, dependencies in constraints.items():
+			for parent in dependencies:
+				graph.add_edge(parent, child)
 		return graph
 
-	def _connect_leaf_to_exit(self, graph, leaf_node, exit_node):
+	def _exit_for_leaf(self, leaf_node, exit_node):
 		t_instructions = tuple(self.instructions.values())
 		if t_instructions[-1] != exit_node:
 			# this basic-block is corrupted, the instructions continue past an
@@ -157,11 +159,10 @@ class BasicBlock(base.Base):
 			raise ValueError('the exit node was not identified as the last instruction')
 		for ins in reversed(t_instructions):
 			if ins == leaf_node:
-				graph.add_edge(leaf_node, exit_node)
 				break
 			if not any(reg.in_iterable(ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
-				graph.add_edge(leaf_node, ins)
-				break
+				return ins
+		return exit_node
 
 	def to_graphviz(self):
 		n_graph = self.to_digraph()
