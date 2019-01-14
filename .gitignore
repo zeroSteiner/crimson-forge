@@ -1,3 +1,6 @@
+*.asm
+*.gv
+*.pdf
 *.py[cod]
 
 .pylintrc

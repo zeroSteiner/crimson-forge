@@ -33,4 +33,4 @@
 __version__ = '0.1.0'
 
 from .binary import Binary
-from .block import BasicBlock
+from .block import BasicBlock, Instruction

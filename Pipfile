@@ -10,9 +10,11 @@ keystone-engine = "*"
 networkx = "*"
 pyvex = "*"
 graphviz = "*"
+tabulate = "*"
 
 [dev-packages]
 ipython = "*"
+ipdb = "*"
 
 [requires]
 python_version = "3.6"

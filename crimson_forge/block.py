@@ -43,6 +43,7 @@ import graphviz
 import networkx
 import networkx.algorithms
 import pyvex
+import tabulate
 
 def _irsb_to_instructions(irsb):
 	ir_instructions = collections.OrderedDict()
@@ -52,6 +53,9 @@ def _irsb_to_instructions(irsb):
 			ir_instructions[address] = collections.deque()
 		ir_instructions[address].append(statement)
 	return ir_instructions
+
+def _register_in_set(reg1, reg_set):
+	return any(reg1 & reg2 for reg2 in reg_set)
 
 _InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
 # hashable
@@ -186,7 +190,6 @@ class Instruction(object):
 		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
 		return cls.from_bytes(bytes(blob), arch, base=base)
 
-
 class _Instructions(collections.abc.Mapping):
 	def __init__(self, arch, cs_ins, vex_ins, ir_tyenv):
 		self.arch = arch
@@ -212,6 +215,8 @@ class _Instructions(collections.abc.Mapping):
 	def __repr__(self):
 		return "<{0} arch: {1} >".format(self.__class__.__name__, self.arch.name)
 
+	def __reversed__(self):
+		yield from reversed(self.cs_instructions.keys())
 
 class BasicBlock(utilities.Base):
 	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv):
@@ -281,25 +286,15 @@ class BasicBlock(utilities.Base):
 		graph = networkx.DiGraph()
 		graph.add_nodes_from(t_instructions)
 
-		_register_in_set = lambda reg1, reg_set: any(reg1 & reg2 for reg2 in reg_set)
-
 		constraints = collections.defaultdict(collections.deque)
 		for idx, ins in enumerate(t_instructions):
-			for reg in ins.registers.accessed:
+			for reg in (ins.registers.accessed | ins.registers.stored):
 				# for each accessed register, we search backwards to find when it was set
 				for pos in reversed(range(0, idx)):
 					o_ins = t_instructions[pos]
 					if _register_in_set(reg, o_ins.registers.modified):
 						constraints[ins].append(o_ins)
 						break
-
-			for reg in ins.registers.stored:
-				# for each stored register, we search both forwards and backwards to ensure it's
-				# stored between the correct modifications
-				for pos in reversed(range(0, idx)):
-					o_ins = t_instructions[pos]
-					if _register_in_set(reg, o_ins.registers.modified):
-						constraints[ins].append(o_ins)
 
 				for pos in range(idx + 1, len(t_instructions)):
 					o_ins = t_instructions[pos]
@@ -317,8 +312,23 @@ class BasicBlock(utilities.Base):
 		if exit_node is not None:
 			leaf_nodes.remove(exit_node)
 			for leaf_node in leaf_nodes:
-				graph.add_edge(leaf_node, exit_node)
+				self._connect_leaf_to_exit(graph, leaf_node, exit_node)
 		return graph
+
+	def _connect_leaf_to_exit(self, graph, leaf_node, exit_node):
+		t_instructions = tuple(self.instructions.values())
+		if t_instructions[-1] != exit_node:
+			# this basic-block is corrupted, the instructions continue past an
+			# explicit modification to the instruction pointer such as a call or
+			# jump
+			raise ValueError('the exit node was not identified as the last instruction')
+		for ins in reversed(t_instructions):
+			if ins == leaf_node:
+				graph.add_edge(leaf_node, exit_node)
+				break
+			if not any(_register_in_set(reg, ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
+				graph.add_edge(leaf_node, ins)
+				break
 
 	def to_graphviz(self):
 		n_graph = self.to_digraph()
@@ -371,5 +381,5 @@ class BasicBlock(utilities.Base):
 		return shuffled
 
 	def pp_asm(self):
-		for ins in self.instructions.values():
-			print("0x{ins.address:04x}  {ins.bytes_hex: <10}  {ins.source}".format(ins=ins))
+		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.instructions.values()]
+		print(tabulate.tabulate(table, tablefmt='plain'))

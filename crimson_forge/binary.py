@@ -114,6 +114,12 @@ class Binary(utilities.Base):
 		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
 		return cls(bytes(blob), arch, base=base)
 
+	@classmethod
+	def from_source_file(cls, source_file, *args, **kwargs):
+		with open(source_file, 'r') as file_h:
+			source = file_h.read()
+		return cls.from_source(source *args, **kwargs)
+
 	def shuffle(self):
 		blocks = [block.shuffle() for block in self.blocks.values()]
 		blob = b''.join(block.bytes for block in blocks)
