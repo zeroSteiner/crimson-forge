@@ -23,7 +23,7 @@ def main():
 
 	arch = architectures[args.arch]
 	binary = crimson_forge.Binary(args.input.read(), arch)
-	new_binary = binary.shuffle()
+	new_binary = binary.permutation()
 	args.output.write(new_binary.bytes)
 
 if __name__ == '__main__':

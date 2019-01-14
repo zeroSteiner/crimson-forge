@@ -30,203 +30,36 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import binascii
 import collections
 import collections.abc
 import itertools
 import random
 
+import crimson_forge.base as base
 import crimson_forge.ir as ir
-import crimson_forge.utilities as utilities
 
 import graphviz
 import networkx
 import networkx.algorithms
-import pyvex
-import tabulate
 
-def _irsb_to_instructions(irsb):
-	ir_instructions = collections.OrderedDict()
-	for statement in irsb.statements:
-		if isinstance(statement, pyvex.stmt.IMark):
-			address = statement.addr
-			ir_instructions[address] = collections.deque()
-		ir_instructions[address].append(statement)
-	return ir_instructions
-
-def _register_in_set(reg1, reg_set):
-	return any(reg1 & reg2 for reg2 in reg_set)
-
-_InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
-# hashable
-class Instruction(object):
-	def __init__(self, arch, cs_ins, vex_statements, ir_tyenv):
-		self.arch = arch
-		self.cs_instruction = cs_ins
-		self.vex_statements = vex_statements
+class _InstructionsProxy(base.InstructionsProxy):
+	def __init__(self, arch, cs_instructions, vex_ins, ir_tyenv):
+		super(_InstructionsProxy, self).__init__(arch, cs_instructions)
+		self._vex_instructions = vex_ins
 		self._ir_tyenv = ir_tyenv
 
-		self.registers = _InstructionRegisters(set(), set(), set())
-		vex_statements = self._fixup_vex_stmts(vex_statements.copy())
-		taint_tracking = {}
-		for stmt in vex_statements:
-			if isinstance(stmt, pyvex.stmt.Exit):
-				self.registers.modified.add(ir.IRRegister.from_ir_stmt_exit(arch, stmt, ir_tyenv))
-			elif isinstance(stmt, (pyvex.stmt.Put, pyvex.stmt.PutI)):
-				self.registers.modified.add(ir.IRRegister.from_ir_stmt_put(arch, stmt, ir_tyenv))
-			elif isinstance(stmt, pyvex.stmt.Store) and isinstance(stmt.data, pyvex.expr.RdTmp):
-				self.registers.stored.update(taint_tracking[stmt.data.tmp])
-			elif isinstance(stmt, pyvex.stmt.WrTmp):
-				# implement taint-tracking to determine which registers were include in the calculation of
-				# a value
-				if isinstance(stmt.data, pyvex.expr.Get):
-					register = ir.IRRegister.from_ir_expr_get(arch, stmt.data, ir_tyenv)
-					self.registers.accessed.add(register)
-					taint_tracking[stmt.tmp] = set((register,))
-				else:
-					tainted = set()
-					for arg in getattr(stmt.data, 'args', []):
-						if not isinstance(arg, pyvex.expr.RdTmp):
-							continue
-						tainted.update(taint_tracking[arg.tmp])
-					taint_tracking[stmt.tmp] = tainted
+	def _resolve_ir(self, address):
+		return self._vex_instructions[address], self._ir_tyenv
 
-	def __bytes__(self):
-		return bytes(self.cs_instruction.bytes)
-
-	def __eq__(self, other):
-		return hash(self) == hash(other)
-
-	def __hash__(self):
-		return hash((bytes(self), self.address, (self.arch.name, self.arch.bits, self.arch.memory_endness), hash(self._ir_tyenv)))
-
-	def __repr__(self):
-		return "<{0} arch: {1}, at: 0x{2:04x} {3!r} >".format(self.__class__.__name__, self.arch.name, self.address,
-															  self.source)
-
-	def _fixup_vex_stmts(self, vex_statements):
-		# pyvex adds a WrTmp statement to the end loading the instruction pointer into a
-		# variable, this operation isn't useful for our purposes and affects the taint tracking
-		last_stmt = vex_statements[-1]
-		if isinstance(last_stmt, pyvex.stmt.WrTmp):
-			vex_statements.pop()
-			last_stmt = vex_statements[-1]
-
-		# this fixes up the IR statements to remove natural increments to the instruction pointer to
-		# prevent it from showing up while performing taint-tracking
-		ins_ptr = ir.IRRegister.from_arch(self.arch, 'ip')  # get the instruction-pointer register
-		if not isinstance(last_stmt, (pyvex.stmt.Put, pyvex.stmt.PutI)):
-			return vex_statements
-		if ir.IRRegister.from_ir_stmt_put(self.arch, last_stmt, self._ir_tyenv) != ins_ptr:
-			return vex_statements
-		if not isinstance(last_stmt.data, pyvex.expr.Const):
-			return vex_statements
-		if last_stmt.data.con.value == self.address + self.cs_instruction.size:
-			vex_statements.pop()
-		return vex_statements
-
-	@property
-	def address(self):
-		return self.cs_instruction.address
-
-	@property
-	def bytes(self):
-		return bytes(self)
-
-	@property
-	def bytes_hex(self):
-		return binascii.b2a_hex(bytes(self)).decode('utf-8')
-
-	@property
-	def source(self):
-		return "{0} {1}".format(self.cs_instruction.mnemonic, self.cs_instruction.op_str).strip()
-
-	# needs to come after
-	def depends_on(self, ins):
-		"""
-		Check if the instruction instance, depends on the specified instruction
-		*ins*. This instruction would be dependant if, for example *ins* loads a
-		value which this instance depnds on.
-
-		:param ins: The instruction to test for dependency status.
-		:type ins: :py:class:`.Instruction`
-		:return: ``True`` if this instruction depends on the other, otherwise ``False``.
-		:rtype: bool
-		"""
-		# sanity checks
-		if not isinstance(ins, Instruction):
-			raise TypeError('ins must be an Instruction instance')
-		if ins.address >= self.address:
-			raise ValueError('ins.address >= self.address')
-		if any(a_reg & r_mod for a_reg, r_mod in itertools.product(self.registers.accessed, ins.registers.modified)):
-			return True
-		if any(s_reg & r_mod for s_reg, r_mod in itertools.product(self.registers.stored, ins.registers.modified)):
-			return True
-		return False
-
-	# needs to come before
-	def dependant_of(self, ins):
-		# sanity checks
-		if not isinstance(ins, Instruction):
-			raise TypeError('ins must be an Instruction instance')
-		if ins.address <= self.address:
-			raise ValueError('ins.address <= self.address')
-		if any(a_reg & r_mod for a_reg, r_mod in itertools.product(self.registers.accessed, ins.registers.modified)):
-			return True
-		if any(s_reg & r_mod for s_reg, r_mod in itertools.product(self.registers.stored, ins.registers.modified)):
-			return True
-		return False
-
-	@classmethod
-	def from_bytes(cls, blob, arch, base=0x1000):
-		cs_ins = next(arch.capstone.disasm(blob, base))
-		irsb = ir.lift(blob, base, arch)
-		vex_instructions = _irsb_to_instructions(irsb)
-		vex_statements = vex_instructions[base]
-		return cls(arch, cs_ins, vex_statements, irsb.tyenv)
-
-	@classmethod
-	def from_source(cls, source, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
-		return cls.from_bytes(bytes(blob), arch, base=base)
-
-class _Instructions(collections.abc.Mapping):
-	def __init__(self, arch, cs_ins, vex_ins, ir_tyenv):
-		self.arch = arch
-		self.cs_instructions = cs_ins
-		self.vex_instructions = vex_ins
-		self._ir_tyenv = ir_tyenv
-
-	def __getitem__(self, key):
-		ins = Instruction(
-			self.arch,
-			self.cs_instructions[key],
-			self.vex_instructions[key],
-			self._ir_tyenv
-		)
-		return ins
-
-	def __iter__(self):
-		yield from self.cs_instructions.keys()
-
-	def __len__(self):
-		return len(self.cs_instructions)
-
-	def __repr__(self):
-		return "<{0} arch: {1} >".format(self.__class__.__name__, self.arch.name)
-
-	def __reversed__(self):
-		yield from reversed(self.cs_instructions.keys())
-
-class BasicBlock(utilities.Base):
+class BasicBlock(base.Base):
 	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv):
 		super(BasicBlock, self).__init__(blob, arch, address)
 		self.cs_instructions.update(cs_instructions)
 		self.vex_instructions.update(vex_instructions)
 		self.parents = {}
 		self.children = {}
-		self._ir_tyenv = ir_tyenv
-		self.instructions = _Instructions(arch, self.cs_instructions, self.vex_instructions, ir_tyenv)
+		self.ir_tyenv = ir_tyenv
+		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.vex_instructions, ir_tyenv)
 
 	def connect_to(self, child):
 		self.children[child.address] = child
@@ -240,7 +73,7 @@ class BasicBlock(utilities.Base):
 
 	@classmethod
 	def from_irsb(cls, blob, cs_instructions, irsb):
-		vex_instructions = _irsb_to_instructions(irsb)
+		vex_instructions = ir.irsb_to_instructions(irsb)
 		return cls(blob, irsb.arch, irsb.addr, cs_instructions, vex_instructions, ir_tyenv=irsb.tyenv)
 
 	def _split_new(self, addresses):
@@ -250,7 +83,7 @@ class BasicBlock(utilities.Base):
 		blob = self.bytes[blob_start:blob_end]
 		cs_ins = collections.OrderedDict((a, self.cs_instructions[a]) for a in addresses)
 		vex_ins = collections.OrderedDict((a, self.vex_instructions[a]) for a in addresses)
-		return cls(blob, self.arch, addresses[0], cs_ins, vex_ins, self._ir_tyenv)
+		return cls(blob, self.arch, addresses[0], cs_ins, vex_ins, self.ir_tyenv)
 
 	def split(self, address):
 		# split this block at the specified address (which can not be the first address) into two,
@@ -292,13 +125,13 @@ class BasicBlock(utilities.Base):
 				# for each accessed register, we search backwards to find when it was set
 				for pos in reversed(range(0, idx)):
 					o_ins = t_instructions[pos]
-					if _register_in_set(reg, o_ins.registers.modified):
+					if reg.in_iterable(o_ins.registers.modified):
 						constraints[ins].append(o_ins)
 						break
 
 				for pos in range(idx + 1, len(t_instructions)):
 					o_ins = t_instructions[pos]
-					if _register_in_set(reg, o_ins.registers.modified):
+					if reg.in_iterable(o_ins.registers.modified):
 						constraints[o_ins].append(ins)
 						break
 
@@ -326,7 +159,7 @@ class BasicBlock(utilities.Base):
 			if ins == leaf_node:
 				graph.add_edge(leaf_node, exit_node)
 				break
-			if not any(_register_in_set(reg, ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
+			if not any(reg.in_iterable(ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
 				graph.add_edge(leaf_node, ins)
 				break
 
@@ -355,7 +188,7 @@ class BasicBlock(utilities.Base):
 			return False
 		return parent.is_direct_child_of(self.address)
 
-	def shuffle(self):
+	def permutation(self):
 		instructions = self._shuffle_instructions()
 		blob = b''.join(bytes(ins) for ins in instructions)
 		return self.__class__.from_bytes(blob, self.arch, self.address)
@@ -379,7 +212,3 @@ class BasicBlock(utilities.Base):
 					continue
 				choices.add(successor)
 		return shuffled
-
-	def pp_asm(self):
-		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.instructions.values()]
-		print(tabulate.tabulate(table, tablefmt='plain'))

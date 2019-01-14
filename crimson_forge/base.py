@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  crimson_forge/utilities.py
+#  crimson_forge/base.py
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are
@@ -30,9 +30,52 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-def remove_comments(source, comment_char=';'):
-	"""Remove comments from assembly source."""
-	# todo: this should use a regex incase theres a ';' in the source
-	lines = source.split('\n')
-	return '\n'.join([line.split(comment_char, 1)[0].rstrip() for line in lines])
+import binascii
+import collections
+import collections.abc
 
+import crimson_forge.instruction as instruction
+
+import tabulate
+
+class InstructionsProxy(collections.abc.Mapping):
+	def __init__(self, arch, cs_instructions):
+		self.arch = arch
+		self.cs_instructions = cs_instructions
+
+	def __getitem__(self, address):
+		return instruction.Instruction(self.arch, self.cs_instructions[address], *self._resolve_ir(address))
+
+	def __iter__(self):
+		yield from self.cs_instructions.keys()
+
+	def __len__(self):
+		return len(self.cs_instructions)
+
+	def __repr__(self):
+		return "<{0} arch: {1} >".format(self.__class__.__name__, self.arch.name)
+
+	def __reversed__(self):
+		yield from reversed(self.cs_instructions.keys())
+
+	def _resolve_ir(self, address):
+		raise NotImplementedError()
+
+	def pp_asm(self):
+		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.values()]
+		print(tabulate.tabulate(table, tablefmt='plain'))
+
+class Base(object):
+	def __init__(self, blob, arch, address):
+		self.bytes = blob
+		self.arch = arch
+		self.address = address
+		self.cs_instructions = collections.OrderedDict()
+		self.vex_instructions = collections.OrderedDict()
+
+	def __repr__(self):
+		return "<{0} arch: {1}, at: 0x{2:04x} >".format(self.__class__.__name__, self.arch.name, self.address)
+
+	@property
+	def bytes_hex(self):
+		return binascii.b2a_hex(self.bytes)

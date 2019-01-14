@@ -30,6 +30,8 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import collections
+
 import pyvex
 
 OPT_LEVEL_NO_OPTIMIZATION = 0
@@ -91,5 +93,25 @@ class IRRegister(object):
 	def from_ir_stmt_put(cls, arch, stmt, ir_tyenv):
 		return cls.from_ir(arch, stmt.offset * 8, stmt.data.result_size(ir_tyenv))
 
+	def in_iterable(self, iterable):
+		return any(self & other_reg for other_reg in iterable)
+
 def lift(blob, base, arch):
 	return pyvex.lift(blob, base, arch, opt_level=OPT_LEVEL_NO_OPTIMIZATION)
+
+def irsb_to_instructions(irsb):
+	"""
+	Take a lifted *irsb* object and return an
+	:py:class:`~collections.OrderedDict` keyed by the address instructions with
+	values of :py:class:`~collections.deque`s containing the IR statements.
+
+	:param irsb: The IR super-block to get instructions for.
+	:rtype: :py:class:`~collections.OrderedDict`
+	"""
+	ir_instructions = collections.OrderedDict()
+	for statement in irsb.statements:
+		if isinstance(statement, pyvex.stmt.IMark):
+			address = statement.addr
+			ir_instructions[address] = collections.deque()
+		ir_instructions[address].append(statement)
+	return ir_instructions

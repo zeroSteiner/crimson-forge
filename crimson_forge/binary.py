@@ -33,11 +33,25 @@
 import collections
 import collections.abc
 
+import crimson_forge.base as base
 import crimson_forge.block as block
 import crimson_forge.ir as ir
 import crimson_forge.utilities as utilities
 
-class Binary(utilities.Base):
+class _InstructionsProxy(base.InstructionsProxy):
+	def __init__(self, arch, cs_instructions, blocks):
+		super(_InstructionsProxy, self).__init__(arch, cs_instructions)
+		self._blocks = blocks
+
+	def _resolve_ir(self, address):
+		for block in self._blocks.values():
+			if address in block.vex_instructions:
+				return block.vex_instructions[address], block.ir_tyenv
+			if block.address > address:
+				break
+		raise KeyError('instruction address not found')
+
+class Binary(base.Base):
 	def __init__(self, blob, arch, base=0x1000):
 		super(Binary, self).__init__(blob, arch, base)
 		self.cs_instructions.update((ins.address, ins) for ins in self._disassemble(blob))
@@ -46,6 +60,7 @@ class Binary(utilities.Base):
 		self.blocks = collections.OrderedDict((addr, self.blocks[addr]) for addr in sorted(self.blocks.keys()))
 		for block in self.blocks.values():
 			self.vex_instructions.update(block.vex_instructions.items())
+		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.blocks)
 
 	@property
 	def base(self):
@@ -120,7 +135,7 @@ class Binary(utilities.Base):
 			source = file_h.read()
 		return cls.from_source(source *args, **kwargs)
 
-	def shuffle(self):
-		blocks = [block.shuffle() for block in self.blocks.values()]
+	def permutation(self):
+		blocks = [block.permutation() for block in self.blocks.values()]
 		blob = b''.join(block.bytes for block in blocks)
 		return self.__class__(blob, self.arch, self.base)
