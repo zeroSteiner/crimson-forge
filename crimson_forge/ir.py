@@ -33,8 +33,12 @@
 import collections
 
 import pyvex
+import pyvex.lifting.util.vex_helper
 
 OPT_LEVEL_NO_OPTIMIZATION = 0
+
+class JumpKind(pyvex.lifting.util.JumpKind):
+	MapFail = 'Ijk_MapFail'
 
 # hashable, immutable
 class IRRegister(object):

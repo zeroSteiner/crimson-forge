@@ -135,8 +135,8 @@ class BasicBlock(base.Base):
 						constraints[o_ins].append(ins)
 						break
 
-		nodes_with_parents = set(itertools.chain(*constraints.values()))
-		leaf_nodes = set(ins for ins in self.instructions.values() if ins not in nodes_with_parents)
+		parent_nodes = set(itertools.chain(*constraints.values()))
+		leaf_nodes = set(ins for ins in self.instructions.values() if ins not in parent_nodes)
 
 		ins_ptr = ir.IRRegister.from_arch(self.arch, 'ip')
 		exit_node = next((ins for ins in leaf_nodes if ins_ptr in ins.registers.modified), None)
@@ -214,37 +214,38 @@ class BasicBlock(base.Base):
 	def permutation_count(self):
 		constraints = self.to_digraph()
 
-		instructions = collections.deque()
 		# the initial choices are any node without a predecessor (dependency)
 		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
 		all_paths = collections.deque()
 
-		def _recursor(selection, _choices=None, _path=None):
-			if _path is None:
-				_path = collections.deque()
-			_path.append(selection)
-			instructions.append(selection)
+		def choice_iter(choices):
+			for choice in sorted(choices, key=lambda ins: ins.address):
+				choices.remove(choice)
+				yield choice
+				choices.add(choice)
+
+		def _recursor(selection, path, _choices=None):
+			path.append(selection)
 			# analyze the nodes which are successors (dependants) of the selection
 			for successor in constraints.successors(selection):
 				# skip the node if it's already been added
-				if successor in instructions:
+				if successor in path:
 					continue
 				# or if all of it's predecessors (dependencies) have not been met
-				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
+				if not all(predecessor in path for predecessor in constraints.predecessors(successor)):
 					continue
 				_choices.add(successor)
 			if _choices:
-				for _choice in tuple(_choices):
-					_choices.remove(_choice)
-					_recursor(_choice, _choices.copy(), _path=_path.copy())
-					_choices.add(choice)
+				for _choice in choice_iter(_choices):
+					_recursor(_choice, path, _choices.copy())
 			else:
-				all_paths.append(_path)
-			instructions.pop()
+				all_paths.append(path.copy())
+			path.pop()
 
-		for choice in tuple(choices):
-			choices.remove(choice)
-			_recursor(choice, _choices=choices.copy())
-			choices.add(choice)
-		print(repr(all_paths))
+		for choice in choice_iter(choices):
+			_recursor(choice, collections.deque(), _choices=choices.copy())
+
+		for path in all_paths:
+			print(', '.join(hex(ins.address) for ins in path))
+
 		return len(all_paths)

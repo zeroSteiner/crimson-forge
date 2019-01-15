@@ -52,7 +52,7 @@ class Instruction(object):
 		vex_statements = self._fixup_vex_stmts(vex_statements.copy())
 		taint_tracking = {}
 		for stmt in vex_statements:
-			if isinstance(stmt, pyvex.stmt.Exit):
+			if isinstance(stmt, pyvex.stmt.Exit) and stmt.jumpkind != ir.JumpKind.MapFail:
 				self.registers.modified.add(ir.IRRegister.from_ir_stmt_exit(arch, stmt, ir_tyenv))
 			elif isinstance(stmt, (pyvex.stmt.Put, pyvex.stmt.PutI)):
 				self.registers.modified.add(ir.IRRegister.from_ir_stmt_put(arch, stmt, ir_tyenv))
