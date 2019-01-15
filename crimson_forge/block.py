@@ -42,6 +42,42 @@ import graphviz
 import networkx
 import networkx.algorithms
 
+def _path_choice_iterator(choices):
+	for choice in sorted(choices, key=lambda ins: ins.address):
+		choices.remove(choice)
+		yield choice
+		choices.add(choice)
+
+def _path_recursor(constraints, selection, choices, current_path=None):
+	all_paths = collections.deque()
+	if current_path is None:
+		current_path = collections.deque()
+	current_path.append(selection)
+	# analyze the nodes which are successors (dependants) of the selection
+	for successor in constraints.successors(selection):
+		# skip the node if it's already been added
+		if successor in current_path:
+			continue
+		# or if all of it's predecessors (dependencies) have not been met
+		if not all(predecessor in current_path for predecessor in constraints.predecessors(successor)):
+			continue
+		choices.add(successor)
+	if choices:
+		for choice in _path_choice_iterator(choices):
+			all_paths.extend(_path_recursor(constraints, choice, choices.copy(), current_path=current_path))
+	else:
+		all_paths.append(current_path.copy())
+	current_path.pop()
+	return all_paths
+
+def path_permutations(constraints):
+	# the initial choices are any node without a predecessor (dependency)
+	choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
+	all_paths = collections.deque()
+	for choice in _path_choice_iterator(choices):
+		all_paths.extend(_path_recursor(constraints, choice, choices.copy()))
+	return all_paths
+
 class _InstructionsProxy(base.InstructionsProxy):
 	def __init__(self, arch, cs_instructions, vex_ins, ir_tyenv):
 		super(_InstructionsProxy, self).__init__(arch, cs_instructions)
@@ -213,39 +249,7 @@ class BasicBlock(base.Base):
 
 	def permutation_count(self):
 		constraints = self.to_digraph()
-
-		# the initial choices are any node without a predecessor (dependency)
-		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
-		all_paths = collections.deque()
-
-		def choice_iter(choices):
-			for choice in sorted(choices, key=lambda ins: ins.address):
-				choices.remove(choice)
-				yield choice
-				choices.add(choice)
-
-		def _recursor(selection, path, _choices=None):
-			path.append(selection)
-			# analyze the nodes which are successors (dependants) of the selection
-			for successor in constraints.successors(selection):
-				# skip the node if it's already been added
-				if successor in path:
-					continue
-				# or if all of it's predecessors (dependencies) have not been met
-				if not all(predecessor in path for predecessor in constraints.predecessors(successor)):
-					continue
-				_choices.add(successor)
-			if _choices:
-				for _choice in choice_iter(_choices):
-					_recursor(_choice, path, _choices.copy())
-			else:
-				all_paths.append(path.copy())
-			path.pop()
-
-		for choice in choice_iter(choices):
-			_recursor(choice, collections.deque(), _choices=choices.copy())
-
-		for path in all_paths:
+		all_permutations = path_permutations(constraints)
+		for path in all_permutations:
 			print(', '.join(hex(ins.address) for ins in path))
-
-		return len(all_paths)
+		return len(all_permutations)
