@@ -1,11 +1,13 @@
 import argparse
 import datetime
+import math
 import random
 
 import crimson_forge
 
 import archinfo
 import boltons.timeutils
+import boltons.strutils
 
 architectures = {
 	'x86': archinfo.ArchX86()
@@ -27,11 +29,19 @@ def main():
 
 	arch = architectures[args.arch]
 	binary = crimson_forge.Binary(args.input.read(), arch)
+
+	permutation_count = binary.permutation_count()
+	instruction_count = len(binary.instructions)
+	crimson_forge.print_status("total instructions: {0:,}".format(instruction_count))
+	crimson_forge.print_status("possible permutations: {0:,}".format(permutation_count))
+	score = math.log(permutation_count, math.factorial(instruction_count))
+	crimson_forge.print_status("randomization potential score: {0:0.5f}".format(score))
+
 	new_binary = binary.permutation()
 	args.output.write(new_binary.bytes)
 
 	elapsed = boltons.timeutils.decimal_relative_time(start_time, datetime.datetime.utcnow())
-	crimson_forge.print_status("completed in: {0:.3f} {1}".format(*elapsed))
+	crimson_forge.print_status("completed in {0:.3f} {1}".format(*elapsed))
 
 if __name__ == '__main__':
 	main()
