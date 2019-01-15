@@ -190,26 +190,61 @@ class BasicBlock(base.Base):
 		return parent.is_direct_child_of(self.address)
 
 	def permutation(self):
-		instructions = self._shuffle_instructions()
-		blob = b''.join(bytes(ins) for ins in instructions)
-		return self.__class__.from_bytes(blob, self.arch, self.address)
-
-	def _shuffle_instructions(self):
 		constraints = self.to_digraph()
-		shuffled = collections.deque()
+		instructions = collections.deque()
 		# the initial choices are any node without a predecessor (dependency)
 		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
 		while choices:  # continue to make selections while we have choices
 			selection = random.choice(tuple(choices))  # make a selection
 			choices.remove(selection)
-			shuffled.append(selection)
+			instructions.append(selection)
 			# analyze the nodes which are successors (dependants) of the selection
 			for successor in constraints.successors(selection):
 				# skip the node if it's already been added
-				if successor in shuffled:
+				if successor in instructions:
 					continue
 				# or if all of it's predecessors (dependencies) have not been met
-				if not all(predecessor in shuffled for predecessor in constraints.predecessors(successor)):
+				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
 					continue
 				choices.add(successor)
-		return shuffled
+
+		blob = b''.join(bytes(ins) for ins in instructions)
+		return self.__class__.from_bytes(blob, self.arch, self.address)
+
+	def permutation_count(self):
+		constraints = self.to_digraph()
+
+		instructions = collections.deque()
+		# the initial choices are any node without a predecessor (dependency)
+		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
+		all_paths = collections.deque()
+
+		def _recursor(selection, _choices=None, _path=None):
+			if _path is None:
+				_path = collections.deque()
+			_path.append(selection)
+			instructions.append(selection)
+			# analyze the nodes which are successors (dependants) of the selection
+			for successor in constraints.successors(selection):
+				# skip the node if it's already been added
+				if successor in instructions:
+					continue
+				# or if all of it's predecessors (dependencies) have not been met
+				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
+					continue
+				_choices.add(successor)
+			if _choices:
+				for _choice in tuple(_choices):
+					_choices.remove(_choice)
+					_recursor(_choice, _choices.copy(), _path=_path.copy())
+					_choices.add(choice)
+			else:
+				all_paths.append(_path)
+			instructions.pop()
+
+		for choice in tuple(choices):
+			choices.remove(choice)
+			_recursor(choice, _choices=choices.copy())
+			choices.add(choice)
+		print(repr(all_paths))
+		return len(all_paths)
