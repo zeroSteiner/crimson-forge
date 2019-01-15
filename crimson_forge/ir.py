@@ -37,8 +37,13 @@ import pyvex.lifting.util.vex_helper
 
 OPT_LEVEL_NO_OPTIMIZATION = 0
 
+# https://github.com/angr/pyvex/blob/master/pyvex/lifting/util/vex_helper.py
 class JumpKind(pyvex.lifting.util.JumpKind):
 	MapFail = 'Ijk_MapFail'
+
+	@classmethod
+	def returns(cls, value):
+		return value in (cls.Call, cls.Syscall, cls.Sysenter)
 
 # hashable, immutable
 class IRRegister(object):

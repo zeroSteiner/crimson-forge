@@ -93,10 +93,10 @@ class Binary(base.Base):
 		# so we skip this step since the relations are already connected
 		else:
 			for address, jumpkind in irsb.constant_jump_targets_and_jumpkinds.items():
-				if jumpkind not in (ir.JumpKind.Boring, ir.JumpKind.Call):
+				if not (jumpkind == ir.JumpKind.Boring or ir.JumpKind.returns(jumpkind)):
 					continue
 				self.__block_from_irsb_next(bblock, address)
-			if irsb.jumpkind == ir.JumpKind.Call:
+			if ir.JumpKind.returns(irsb.jumpkind):
 				self.__block_from_irsb_next(bblock, bblock.address + len(bblock.bytes))
 		return bblock
 
