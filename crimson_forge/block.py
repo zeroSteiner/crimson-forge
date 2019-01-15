@@ -250,6 +250,4 @@ class BasicBlock(base.Base):
 	def permutation_count(self):
 		constraints = self.to_digraph()
 		all_permutations = path_permutations(constraints)
-		for path in all_permutations:
-			print(', '.join(hex(ins.address) for ins in path))
 		return len(all_permutations)

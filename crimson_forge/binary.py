@@ -139,3 +139,9 @@ class Binary(base.Base):
 		blocks = [block.permutation() for block in self.blocks.values()]
 		blob = b''.join(block.bytes for block in blocks)
 		return self.__class__(blob, self.arch, self.base)
+
+	def permutation_count(self):
+		count = 1
+		for block in self.blocks.values():
+			count *= block.permutation_count()
+		return count
