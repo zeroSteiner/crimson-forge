@@ -32,6 +32,7 @@
 
 import argparse
 import datetime
+import enum
 import gc
 import math
 import os
@@ -43,20 +44,47 @@ import archinfo
 import boltons.timeutils
 import boltons.strutils
 
+HELP_EPILOG = """\
+data format choices:
+  raw        raw executable code
+  source     assembly source code
+"""
+
 architectures = {
 	'x86': archinfo.ArchX86()
 }
 
+@enum.unique
+class DataFormat(enum.Enum):
+	RAW = 'raw'
+	SOURCE = 'source'
+
+data_formats = tuple(format.value for format in DataFormat)
+def argtype_data_format(value):
+	try:
+		format_type = DataFormat(value)
+	except ValueError:
+		raise argparse.ArgumentTypeError("{0!r} is not a valid data format".format(value)) from None
+	return format_type
+
 def main():
 	start_time = datetime.datetime.utcnow()
-	parser = argparse.ArgumentParser('crimson-forge', description='Crimson Forge CLI', conflict_handler='resolve', fromfile_prefix_chars='@')
+	parser = argparse.ArgumentParser(
+		'crimson-forge',
+		description='Crimson Forge CLI',
+		conflict_handler='resolve',
+		epilog=HELP_EPILOG,
+		formatter_class=argparse.RawTextHelpFormatter,
+		fromfile_prefix_chars='@'
+	)
 	gc_group = parser.add_argument_group('garbage collector options')
 	gc_group.add_argument('--gc-debug-leak', action='store_const', const=gc.DEBUG_LEAK, default=0, help='set the DEBUG_LEAK flag')
 	gc_group.add_argument('--gc-debug-stats', action='store_const', const=gc.DEBUG_STATS, default=0, help='set the DEBUG_STATS flag')
 
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture')
+	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format')
 	parser.add_argument('-v', '--version', action='version', version='%(prog)s Version: ' + crimson_forge.__version__)
-	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='value', type=int, help='the prng seed')
+	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 	parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
 	parser.add_argument('output', nargs='?', type=argparse.FileType('wb'), help='the optional output file')
 
@@ -70,7 +98,10 @@ def main():
 		crimson_forge.print_status("seeding the random number generator with {0} (0x{0:x})".format(args.prng_seed))
 
 	arch = architectures[args.arch]
-	binary = crimson_forge.Binary(args.input.read(), arch)
+	if args.input_format is DataFormat.RAW:
+		binary = crimson_forge.Binary(args.input.read(), arch)
+	elif args.input_format is DataFormat.SOURCE:
+		binary = crimson_forge.Binary.from_source(args.input.read().decode('utf-8'), arch)
 
 	permutation_count = binary.permutation_count()
 	instruction_count = len(binary.instructions)
@@ -82,6 +113,8 @@ def main():
 	new_binary = binary.permutation()
 	if args.output:
 		args.output.write(new_binary.bytes)
+	else:
+		crimson_forge.print_status('no output file specified')
 
 	elapsed = boltons.timeutils.decimal_relative_time(start_time, datetime.datetime.utcnow())
 	crimson_forge.print_status("completed in {0:.3f} {1}".format(*elapsed))
