@@ -95,12 +95,28 @@ class IRRegister(object):
 		return cls.from_ir(arch, expr.offset * 8, expr.result_size(ir_tyenv))
 
 	@classmethod
+	def from_ir_expr_geti(cls, arch, expr, ir_tyenv):
+		offset = expr.descr.base * 8
+		size = pyvex.const.get_type_size(expr.descr.elemTy) * expr.descr.nElems
+		return cls.from_ir(arch, offset, size=size)
+
+	@classmethod
 	def from_ir_stmt_exit(cls, arch, stmt, ir_tyenv):
 		return cls.from_ir(arch, stmt.offsIP * 8)
 
 	@classmethod
 	def from_ir_stmt_put(cls, arch, stmt, ir_tyenv):
 		return cls.from_ir(arch, stmt.offset * 8, stmt.data.result_size(ir_tyenv))
+
+	@classmethod
+	def from_ir_stmt_puti(cls, arch, stmt, ir_tyenv):
+		# PutI statements are reading from a variable location within the guest
+		# state, this treats the entire range as a single registers tracking the
+		# entire range as a single segment
+		# see: https://github.com/angr/vex/blob/4bdf4da8e0208e8ebf0a728d0477aebfba890f93/pub/libvex_ir.h#L2001-L2035
+		offset = stmt.descr.base * 8
+		size = pyvex.const.get_type_size(stmt.descr.elemTy) * stmt.descr.nElems
+		return cls.from_ir(arch, offset, size=size)
 
 	def in_iterable(self, iterable):
 		return any(self & other_reg for other_reg in iterable)

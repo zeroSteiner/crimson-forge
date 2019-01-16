@@ -54,8 +54,10 @@ class Instruction(object):
 		for stmt in vex_statements:
 			if isinstance(stmt, pyvex.stmt.Exit) and stmt.jumpkind != ir.JumpKind.MapFail:
 				self.registers.modified.add(ir.IRRegister.from_ir_stmt_exit(arch, stmt, ir_tyenv))
-			elif isinstance(stmt, (pyvex.stmt.Put, pyvex.stmt.PutI)):
+			elif isinstance(stmt, pyvex.stmt.Put):
 				self.registers.modified.add(ir.IRRegister.from_ir_stmt_put(arch, stmt, ir_tyenv))
+			elif isinstance(stmt, pyvex.stmt.PutI):
+				self.registers.modified.add(ir.IRRegister.from_ir_stmt_puti(arch, stmt, ir_tyenv))
 			elif isinstance(stmt, pyvex.stmt.Store) and isinstance(stmt.data, pyvex.expr.RdTmp):
 				self.registers.stored.update(taint_tracking[stmt.data.tmp])
 			elif isinstance(stmt, pyvex.stmt.WrTmp):
@@ -63,6 +65,10 @@ class Instruction(object):
 				# a value
 				if isinstance(stmt.data, pyvex.expr.Get):
 					register = ir.IRRegister.from_ir_expr_get(arch, stmt.data, ir_tyenv)
+					self.registers.accessed.add(register)
+					taint_tracking[stmt.tmp] = set((register,))
+				elif isinstance(stmt.data, pyvex.expr.GetI):
+					register = ir.IRRegister.from_ir_expr_geti(arch, stmt.data, ir_tyenv)
 					self.registers.accessed.add(register)
 					taint_tracking[stmt.tmp] = set((register,))
 				else:
