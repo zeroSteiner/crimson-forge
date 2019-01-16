@@ -51,12 +51,18 @@ class _InstructionsProxy(base.InstructionsProxy):
 				break
 		raise KeyError('instruction address not found')
 
+# todo: rename this to ExecutableSegment for accuracy
 class Binary(base.Base):
 	def __init__(self, blob, arch, base=0x1000):
 		super(Binary, self).__init__(blob, arch, base)
 		self.cs_instructions.update((ins.address, ins) for ins in self._disassemble(blob))
 		self.blocks = collections.OrderedDict()
-		self._block_from_irsb(self.__vex_lift(blob))
+		for ins_addr in self.cs_instructions:
+			if any(ins_addr in block.instructions for block in self.blocks.values()):
+				continue
+			self._process_irsb(self.__vex_lift(blob[ins_addr-base:], base=ins_addr))
+
+		# order the blocks by their address
 		self.blocks = collections.OrderedDict((addr, self.blocks[addr]) for addr in sorted(self.blocks.keys()))
 		for block in self.blocks.values():
 			self.vex_instructions.update(block.vex_instructions.items())
@@ -69,7 +75,7 @@ class Binary(base.Base):
 	def _disassemble(self, blob):
 		yield from self.arch.capstone.disasm(blob, self.base)
 
-	def _block_from_irsb(self, irsb, parent=None):
+	def _process_irsb(self, irsb, parent=None):
 		offset = irsb.addr - self.base
 		blob = self.bytes[offset:offset + irsb.size]
 		cs_instructions = collections.OrderedDict()
@@ -95,12 +101,12 @@ class Binary(base.Base):
 			for address, jumpkind in irsb.constant_jump_targets_and_jumpkinds.items():
 				if not (jumpkind == ir.JumpKind.Boring or ir.JumpKind.returns(jumpkind)):
 					continue
-				self.__block_from_irsb_next(bblock, address)
+				self.__process_irsb_next_block(bblock, address)
 			if ir.JumpKind.returns(irsb.jumpkind):
-				self.__block_from_irsb_next(bblock, bblock.address + len(bblock.bytes))
+				self.__process_irsb_next_block(bblock, bblock.address + len(bblock.bytes))
 		return bblock
 
-	def __block_from_irsb_next(self, bblock, address):
+	def __process_irsb_next_block(self, bblock, address):
 		# search through existing blocks to find a pre-existing one that
 		# contains the jump target and split it
 		for jmp_bblock in self.blocks.values():
@@ -118,7 +124,7 @@ class Binary(base.Base):
 		else:
 			blob = self.bytes[address - self.base:]
 			if blob:
-				self._block_from_irsb(self.__vex_lift(blob, address), parent=bblock)
+				self._process_irsb(self.__vex_lift(blob, address), parent=bblock)
 
 	def __vex_lift(self, blob, base=None):
 		base = self.base if base is None else base

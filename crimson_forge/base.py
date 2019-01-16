@@ -43,6 +43,9 @@ class InstructionsProxy(collections.abc.Mapping):
 		self.arch = arch
 		self.cs_instructions = cs_instructions
 
+	def __contains__(self, key):
+		return key in self.cs_instructions
+
 	def __getitem__(self, address):
 		return instruction.Instruction(self.arch, self.cs_instructions[address], *self._resolve_ir(address))
 

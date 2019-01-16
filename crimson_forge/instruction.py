@@ -39,6 +39,9 @@ import crimson_forge.utilities as utilities
 
 import pyvex
 
+class TaintTrackingError(RuntimeError):
+	pass
+
 _InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
 # hashable
 class Instruction(object):
@@ -52,14 +55,31 @@ class Instruction(object):
 		vex_statements = self._fixup_vex_stmts(vex_statements.copy())
 		taint_tracking = {}
 		for stmt in vex_statements:
-			if isinstance(stmt, pyvex.stmt.Exit) and stmt.jumpkind != ir.JumpKind.MapFail:
-				self.registers.modified.add(ir.IRRegister.from_ir_stmt_exit(arch, stmt, ir_tyenv))
+			if isinstance(stmt, pyvex.stmt.CAS):
+				taint_tracking[stmt.oldLo] = taint_tracking[stmt.dataLo.tmp] | taint_tracking[stmt.expdLo.tmp]
+				if not (stmt.oldHi == 0xffffffff or stmt.expdHi is None):
+					# double element
+					taint_tracking[stmt.oldHi] = taint_tracking[stmt.dataHi.tmp] | taint_tracking[stmt.expdHi.tmp]
+			elif isinstance(stmt, pyvex.stmt.Dirty):
+				pass  # todo: this should probably log a warning message that we lost track here
+			elif isinstance(stmt, pyvex.stmt.Exit):
+				if stmt.jumpkind != ir.JumpKind.MapFail:
+					self.registers.modified.add(ir.IRRegister.from_ir_stmt_exit(arch, stmt, ir_tyenv))
+			elif isinstance(stmt, pyvex.stmt.IMark):
+				pass
+			elif isinstance(stmt, pyvex.stmt.NoOp):
+				pass
 			elif isinstance(stmt, pyvex.stmt.Put):
 				self.registers.modified.add(ir.IRRegister.from_ir_stmt_put(arch, stmt, ir_tyenv))
 			elif isinstance(stmt, pyvex.stmt.PutI):
 				self.registers.modified.add(ir.IRRegister.from_ir_stmt_puti(arch, stmt, ir_tyenv))
-			elif isinstance(stmt, pyvex.stmt.Store) and isinstance(stmt.data, pyvex.expr.RdTmp):
-				self.registers.stored.update(taint_tracking[stmt.data.tmp])
+			elif isinstance(stmt, pyvex.stmt.Store):
+				if isinstance(stmt.data, pyvex.expr.Const):
+					pass
+				elif isinstance(stmt.data, pyvex.expr.RdTmp):
+					self.registers.stored.update(taint_tracking[stmt.data.tmp])
+				else:
+					raise TaintTrackingError('can not handle Store where data is not Const or RdTmp')
 			elif isinstance(stmt, pyvex.stmt.WrTmp):
 				# implement taint-tracking to determine which registers were include in the calculation of
 				# a value
@@ -78,6 +98,8 @@ class Instruction(object):
 							continue
 						tainted.update(taint_tracking[arg.tmp])
 					taint_tracking[stmt.tmp] = tainted
+			else:
+				raise TaintTrackingError('unsupported IR statement: ' + stmt.__class__.__name__)
 
 	def __bytes__(self):
 		return bytes(self.cs_instruction.bytes)
