@@ -17,3 +17,6 @@ boltons = "*"
 [dev-packages]
 ipython = "*"
 ipdb = "*"
+
+[scripts]
+crimson-forge = "python -m crimson_forge"

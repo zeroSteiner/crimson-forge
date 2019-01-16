@@ -11,3 +11,7 @@ dist/*
 docs/build/*
 docs/coverage/*
 docs/html/*
+
+# ignore jupyter notebooks
+.ipynb_checkpoints/*
+*.ipynb
