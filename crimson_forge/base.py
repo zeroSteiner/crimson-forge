@@ -68,6 +68,10 @@ class InstructionsProxy(collections.abc.Mapping):
 		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.values()]
 		print(tabulate.tabulate(table, tablefmt='plain'))
 
+	def pp_ir(self):
+		for ins in self.values():
+			ins.pp_ir()
+
 class Base(object):
 	def __init__(self, blob, arch, address):
 		self.bytes = blob

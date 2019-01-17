@@ -55,7 +55,9 @@ class Instruction(object):
 		vex_statements = self._fixup_vex_stmts(vex_statements.copy())
 		taint_tracking = {}
 		for stmt in vex_statements:
-			if isinstance(stmt, pyvex.stmt.CAS):
+			if isinstance(stmt, pyvex.stmt.AbiHint):
+				pass
+			elif isinstance(stmt, pyvex.stmt.CAS):
 				taint_tracking[stmt.oldLo] = taint_tracking[stmt.dataLo.tmp] | taint_tracking[stmt.expdLo.tmp]
 				if not (stmt.oldHi == 0xffffffff or stmt.expdHi is None):
 					# double element
@@ -199,3 +201,21 @@ class Instruction(object):
 	def from_source(cls, source, arch, base=0x1000):
 		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
 		return cls.from_bytes(bytes(blob), arch, base=base)
+
+	def pp_asm(self):
+		print("0x{:04x}  {} {}".format(self.address, self.bytes_hex, self.source))
+
+	def pp_ir(self):
+		for stmt in self.vex_statements:
+			if isinstance(stmt, pyvex.stmt.Put):
+				reg_name = self.arch.translate_register_name(stmt.offset, stmt.data.result_size(self._ir_tyenv) // 8)
+				stmt_str = stmt.__str__(reg_name=reg_name)
+			elif isinstance(stmt, pyvex.stmt.WrTmp) and isinstance(stmt.data, pyvex.expr.Get):
+				reg_name = self.arch.translate_register_name(stmt.data.offset, stmt.data.result_size(self._ir_tyenv) // 8)
+				stmt_str = stmt.__str__(reg_name=reg_name)
+			elif isinstance(stmt, pyvex.stmt.Exit):
+				reg_name = self.arch.translate_register_name(stmt.offsIP, self.arch.bits // 8)
+				stmt_str = stmt.__str__(reg_name=reg_name)
+			else:
+				stmt_str = stmt.__str__()
+			print(stmt_str)
