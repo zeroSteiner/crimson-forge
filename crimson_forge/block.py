@@ -101,6 +101,13 @@ class BasicBlock(base.Base):
 		self.children[child.address] = child
 		child.parents[self.address] = self
 
+	def disconnect_from(self, child):
+		if isinstance(child, BasicBlock):
+			child = child.address
+		child_bblock = self.children.pop(child)
+		child_bblock.parents.pop(self.address)
+		return child_bblock
+
 	@classmethod
 	def from_bytes(cls, blob, arch, base=0x1000):
 		cs_instructions = collections.OrderedDict()

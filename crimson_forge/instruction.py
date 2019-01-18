@@ -33,6 +33,7 @@
 import binascii
 import collections
 import itertools
+import sys
 
 import crimson_forge.ir as ir
 import crimson_forge.utilities as utilities
@@ -202,10 +203,16 @@ class Instruction(object):
 		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
 		return cls.from_bytes(bytes(blob), arch, base=base)
 
-	def pp_asm(self):
-		print("0x{:04x}  {} {}".format(self.address, self.bytes_hex, self.source))
+	def pp_asm(self, stream='stdout'):
+		formatted = "0x{:04x}  {} {}".format(self.address, self.bytes_hex, self.source)
+		if stream is not None:
+			if isinstance(stream, str) and stream.lower() in ('stderr', 'stdout'):
+				stream = getattr(sys, stream.lower())
+			print(formatted, file=stream)
+		return formatted
 
-	def pp_ir(self):
+	def pp_ir(self, stream='stdout'):
+		formatted = collections.deque()
 		for stmt in self.vex_statements:
 			if isinstance(stmt, pyvex.stmt.Put):
 				reg_name = self.arch.translate_register_name(stmt.offset, stmt.data.result_size(self._ir_tyenv) // 8)
@@ -218,4 +225,10 @@ class Instruction(object):
 				stmt_str = stmt.__str__(reg_name=reg_name)
 			else:
 				stmt_str = stmt.__str__()
-			print(stmt_str)
+			formatted.append(stmt_str)
+		formatted = '\n'.join(formatted)
+		if stream is not None:
+			if isinstance(stream, str) and stream.lower() in ('stderr', 'stdout'):
+				stream = getattr(sys, stream.lower())
+			print(formatted, file=stream)
+		return formatted

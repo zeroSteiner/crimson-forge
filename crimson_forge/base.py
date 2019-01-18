@@ -33,6 +33,7 @@
 import binascii
 import collections
 import collections.abc
+import sys
 
 import crimson_forge.instruction as instruction
 
@@ -64,9 +65,14 @@ class InstructionsProxy(collections.abc.Mapping):
 	def _resolve_ir(self, address):
 		raise NotImplementedError()
 
-	def pp_asm(self):
+	def pp_asm(self, stream='stdout'):
 		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.values()]
-		print(tabulate.tabulate(table, tablefmt='plain'))
+		formatted = tabulate.tabulate(table, tablefmt='plain')
+		if stream is not None:
+			if isinstance(stream, str) and stream.lower() in ('stderr', 'stdout'):
+				stream = getattr(sys, stream.lower())
+			print(formatted, file=stream)
+		return formatted
 
 	def pp_ir(self):
 		for ins in self.values():
