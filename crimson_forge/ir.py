@@ -48,7 +48,7 @@ class JumpKind(pyvex.lifting.util.JumpKind):
 # hashable, immutable
 class IRJump(object):
 	__slots__ = ('_arch', '_from_address', '_to_address', '_kind')
-	def __init__(self, arch, to_address, from_address, kind):
+	def __init__(self, arch, to_address, from_address, kind=JumpKind.Boring):
 		self._arch = arch
 		self._to_address = to_address
 		self._from_address = from_address

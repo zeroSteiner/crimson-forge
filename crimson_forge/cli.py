@@ -51,7 +51,8 @@ data format choices:
 """
 
 architectures = {
-	'x86': archinfo.ArchX86()
+	'x86': archinfo.ArchX86(),
+	'x86-64': archinfo.ArchAMD64(),
 }
 
 @enum.unique

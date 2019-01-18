@@ -98,6 +98,8 @@ class BasicBlock(base.Base):
 		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.vex_instructions, ir_tyenv)
 
 	def connect_to(self, child):
+		if len(self.children) == 2 and child not in self.children:
+			raise RuntimeError('basic-block can not have more than two children')
 		self.children[child.address] = child
 		child.parents[self.address] = self
 
