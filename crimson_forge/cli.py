@@ -34,6 +34,7 @@ import argparse
 import datetime
 import enum
 import gc
+import hashlib
 import logging
 import math
 import os
@@ -54,8 +55,8 @@ data format choices:
 """
 
 architectures = {
+	'amd64': archinfo.ArchAMD64(),
 	'x86': archinfo.ArchX86(),
-	'x86-64': archinfo.ArchAMD64(),
 }
 
 @enum.unique
@@ -70,6 +71,9 @@ def argtype_data_format(value):
 	except ValueError:
 		raise argparse.ArgumentTypeError("{0!r} is not a valid data format".format(value)) from None
 	return format_type
+
+def hash(data, algorithm='sha256'):
+	return hashlib.new(algorithm, data).hexdigest()
 
 def main():
 	start_time = datetime.datetime.utcnow()
@@ -111,10 +115,13 @@ def main():
 
 	arch = architectures[args.arch]
 	if args.input_format is DataFormat.RAW:
-		binary = crimson_forge.Binary(args.input.read(), arch)
+		data = args.input.read()
+		crimson_forge.print_status('input hash (sha-256): ' + hash(data))
+		binary = crimson_forge.Binary(data, arch)
 	elif args.input_format is DataFormat.SOURCE:
 		binary = crimson_forge.Binary.from_source(args.input.read().decode('utf-8'), arch)
 
+	crimson_forge.print_status("total basic-blocks: {0:,}".format(len(binary.blocks)))
 	permutation_count = binary.permutation_count()
 	instruction_count = len(binary.instructions)
 	crimson_forge.print_status("total instructions: {0:,}".format(instruction_count))
@@ -124,7 +131,9 @@ def main():
 
 	new_binary = binary.permutation()
 	if args.output:
-		args.output.write(new_binary.bytes)
+		data = new_binary.bytes
+		crimson_forge.print_status('output hash (sha-256): ' + hash(data))
+		args.output.write(data)
 	else:
 		crimson_forge.print_status('no output file specified')
 
