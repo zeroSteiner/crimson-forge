@@ -32,16 +32,26 @@
 
 import binascii
 import collections
-import itertools
+import logging
 import sys
 
 import crimson_forge.ir as ir
 import crimson_forge.utilities as utilities
 
+import archinfo
 import pyvex
+
+logger = logging.getLogger('crimson-forge.instruction')
 
 class TaintTrackingError(RuntimeError):
 	pass
+
+postprocessors = collections.defaultdict(list)
+def register_postprocessor(*architectures):
+	def decorator(function):
+		for arch in architectures:
+			postprocessors[arch.name].append(function)
+	return decorator
 
 _InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
 # hashable
@@ -51,6 +61,7 @@ class Instruction(object):
 		self.cs_instruction = cs_ins
 		self.vex_statements = vex_statements
 		self._ir_tyenv = ir_tyenv
+		self.dirty = False
 
 		self.registers = _InstructionRegisters(set(), set(), set())
 		vex_statements = self._fixup_vex_stmts(vex_statements.copy())
@@ -64,7 +75,14 @@ class Instruction(object):
 					# double element
 					taint_tracking[stmt.oldHi] = taint_tracking[stmt.dataHi.tmp] | taint_tracking[stmt.expdHi.tmp]
 			elif isinstance(stmt, pyvex.stmt.Dirty):
-				pass  # todo: this should probably log a warning message that we lost track here
+				self.dirty = True
+				# handle dirty statements on a case-by-case basis
+				if stmt.cee.name in ('amd64g_dirtyhelper_FSTENV', 'x86g_dirtyhelper_FSTENV'):
+					logger.info('encountered handled dirty IR statement: ' + stmt.cee.name)
+					self.registers.accessed.add(ir.IRRegister.from_arch(self.arch, 'ftop'))
+					self.registers.stored.add(ir.IRRegister.from_arch(self.arch, 'ftop'))
+				else:
+					logger.warning('encountered unhandled dirty IR statement: ' + stmt.cee.name)
 			elif isinstance(stmt, pyvex.stmt.Exit):
 				if stmt.jumpkind != ir.JumpKind.MapFail:
 					self.registers.modified.add(ir.IRRegister.from_ir_stmt_exit(arch, stmt, ir_tyenv))
@@ -103,6 +121,8 @@ class Instruction(object):
 					taint_tracking[stmt.tmp] = tainted
 			else:
 				raise TaintTrackingError('unsupported IR statement: ' + stmt.__class__.__name__)
+		for postprocessor in postprocessors[self.arch.name]:
+			postprocessor(self)
 
 	def __bytes__(self):
 		return bytes(self.cs_instruction.bytes)
@@ -150,42 +170,6 @@ class Instruction(object):
 	def bytes_hex(self):
 		return binascii.b2a_hex(bytes(self)).decode('utf-8')
 
-	# needs to come after
-	def depends_on(self, ins):
-		"""
-		Check if the instruction instance, depends on the specified instruction
-		*ins*. This instruction would be dependant if, for example *ins* loads a
-		value which this instance depnds on.
-
-		:param ins: The instruction to test for dependency status.
-		:type ins: :py:class:`.Instruction`
-		:return: ``True`` if this instruction depends on the other, otherwise ``False``.
-		:rtype: bool
-		"""
-		# sanity checks
-		if not isinstance(ins, Instruction):
-			raise TypeError('ins must be an Instruction instance')
-		if ins.address >= self.address:
-			raise ValueError('ins.address >= self.address')
-		if any(a_reg & r_mod for a_reg, r_mod in itertools.product(self.registers.accessed, ins.registers.modified)):
-			return True
-		if any(s_reg & r_mod for s_reg, r_mod in itertools.product(self.registers.stored, ins.registers.modified)):
-			return True
-		return False
-
-	# needs to come before
-	def dependant_of(self, ins):
-		# sanity checks
-		if not isinstance(ins, Instruction):
-			raise TypeError('ins must be an Instruction instance')
-		if ins.address <= self.address:
-			raise ValueError('ins.address <= self.address')
-		if any(a_reg & r_mod for a_reg, r_mod in itertools.product(self.registers.accessed, ins.registers.modified)):
-			return True
-		if any(s_reg & r_mod for s_reg, r_mod in itertools.product(self.registers.stored, ins.registers.modified)):
-			return True
-		return False
-
 	@classmethod
 	def from_bytes(cls, blob, arch, base=0x1000):
 		cs_ins = next(arch.capstone.disasm(blob, base))
@@ -232,3 +216,25 @@ class Instruction(object):
 	@property
 	def source(self):
 		return "{0} {1}".format(self.cs_instruction.mnemonic, self.cs_instruction.op_str).strip()
+
+	def to_irsb(self):
+		return ir.lift(self.bytes, self.address, self.arch)
+
+################################################################################
+# Architecture Specific Post-Processors
+################################################################################
+amd64 = archinfo.ArchAMD64()
+x86 = archinfo.ArchX86()
+
+@register_postprocessor(amd64, x86)
+def x87_fpu_instructions(ins):
+	# FPU instructions record the Instruction Pointer, see section 8.1.8 of the
+	# Intel 64 and IA-32 Architectures Software Developer's Manual
+	ins_bytes = ins.bytes
+	if len(ins_bytes) != 2 or ins_bytes[0] != 0xd9:
+		return
+	if 0xe8 <= ins_bytes[1] <= 0xee:
+		ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))
+		# this should also mark a registers as being modified since the
+		# instruction pointer is copied into it, but archinfo.ArchX86 does not
+		# seem to have floating-point instruction and data pointer registers

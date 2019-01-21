@@ -90,7 +90,9 @@ class IRRegister(object):
 		return bool(set(self._positions).issuperset(other._positions))
 
 	def __eq__(self, other):
-		return self._positions == other._positions
+		if not isinstance(other, IRRegister):
+			return False
+		return hash(self) == hash(other)
 
 	def __hash__(self):
 		return hash(((self._arch.name, self._arch.bits, self._arch.memory_endness), self._positions))

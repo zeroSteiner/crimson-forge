@@ -220,6 +220,7 @@ class BasicBlock(base.Base):
 		t_instructions = tuple(self.instructions.values())
 		graph = networkx.DiGraph()
 		graph.add_nodes_from(t_instructions)
+		ins_ptr = ir.IRRegister.from_arch(self.arch, 'ip')
 
 		constraints = collections.defaultdict(collections.deque)
 		for idx, ins in enumerate(t_instructions):
@@ -227,20 +228,25 @@ class BasicBlock(base.Base):
 				# for each accessed register, we search backwards to find when it was set
 				for pos in reversed(range(0, idx)):
 					o_ins = t_instructions[pos]
-					if reg.in_iterable(o_ins.registers.modified):
+					if reg == ins_ptr:
+						# if the instruction pointer is accessed or stored then this instruction is positionally
+						# dependant, so mark all proceeding instructions as dependants so the position is correct
+						constraints[ins].append(o_ins)
+					elif o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
 						constraints[ins].append(o_ins)
 						break
 
 				for pos in range(idx + 1, len(t_instructions)):
 					o_ins = t_instructions[pos]
-					if reg.in_iterable(o_ins.registers.modified):
+					if reg == ins_ptr:
+						constraints[o_ins].append(ins)
+					elif o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
 						constraints[o_ins].append(ins)
 						break
 
 		parent_nodes = set(itertools.chain(*constraints.values()))
 		leaf_nodes = set(ins for ins in self.instructions.values() if ins not in parent_nodes)
 
-		ins_ptr = ir.IRRegister.from_arch(self.arch, 'ip')
 		exit_node = next((ins for ins in leaf_nodes if ins_ptr in ins.registers.modified), None)
 		if exit_node is not None:
 			leaf_nodes.remove(exit_node)
