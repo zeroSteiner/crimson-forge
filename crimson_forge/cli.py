@@ -34,15 +34,18 @@ import argparse
 import datetime
 import enum
 import gc
+import logging
 import math
 import os
 import random
 
 import crimson_forge
+import crimson_forge.utilities
 
 import archinfo
 import boltons.timeutils
 import boltons.strutils
+import smoke_zephyr.utilities
 
 HELP_EPILOG = """\
 data format choices:
@@ -81,6 +84,9 @@ def main():
 	gc_group = parser.add_argument_group('garbage collector options')
 	gc_group.add_argument('--gc-debug-leak', action='store_const', const=gc.DEBUG_LEAK, default=0, help='set the DEBUG_LEAK flag')
 	gc_group.add_argument('--gc-debug-stats', action='store_const', const=gc.DEBUG_STATS, default=0, help='set the DEBUG_STATS flag')
+	log_group = parser.add_argument_group('logging options')
+	log_group.add_argument('--log-level', default=logging.WARNING, choices=('DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'), help='set the log level')
+	log_group.add_argument('--log-name', default='', help='specify the root logger')
 
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture')
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format')
@@ -90,6 +96,11 @@ def main():
 	parser.add_argument('output', nargs='?', type=argparse.FileType('wb'), help='the optional output file')
 
 	args = parser.parse_args()
+	smoke_zephyr.utilities.configure_stream_logger(
+		logger=args.log_name,
+		level=args.log_level,
+		formatter=crimson_forge.utilities.ColoredLogFormatter('%(levelname)s %(message)s')
+	)
 	gc.set_debug(args.gc_debug_stats | args.gc_debug_leak)
 
 	crimson_forge.print_status("crimson-forge engine: v{0}".format(crimson_forge.__version__))

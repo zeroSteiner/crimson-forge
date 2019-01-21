@@ -30,8 +30,20 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import logging
+import os
+import re
+import traceback
+
 import termcolor
 
+LEVEL_COLORS = {
+	logging.DEBUG: ('cyan',),
+	logging.INFO: ('white',),
+	logging.WARNING: ('yellow',),
+	logging.ERROR: ('red',),
+	logging.CRITICAL: ('white', 'on_red')
+}
 print_colors = True
 
 def print_error(message):
@@ -80,3 +92,40 @@ def remove_comments(source, comment_char=';'):
 	lines = source.split('\n')
 	return '\n'.join([line.split(comment_char, 1)[0].rstrip() for line in lines])
 
+class ColoredLogFormatter(logging.Formatter):
+	"""
+	A formatting class suitable for use with the :py:mod:`logging` module which
+	colorizes the names of log levels.
+	"""
+	def format(self, record):
+		orig_levelname = None
+		if record.levelno in LEVEL_COLORS:
+			orig_levelname = record.levelname
+			record.levelname = termcolor.colored("{0:<8}".format(record.levelname), *LEVEL_COLORS[record.levelno], attrs=['bold'])
+		value = super(ColoredLogFormatter, self).format(record)
+		record.exc_text = None
+		if orig_levelname is not None:
+			record.levelname = orig_levelname
+		return value
+
+	@staticmethod
+	def formatException(exc_info):
+		tb_lines = traceback.format_exception(*exc_info)
+		tb_lines[0] = termcolor.colored(tb_lines[0], 'red', attrs=['bold'])
+		for line_no, line in enumerate(tb_lines[1:], 1):
+			search = re.search(r'File \"([^"]+)", line ([\d,]+), in', line)
+			if search:
+				new_line = line[:search.start(1)]
+				new_line += termcolor.colored(search.group(1), 'yellow', attrs=['underline'])
+				new_line += line[search.end(1):search.start(2)]
+				new_line += termcolor.colored(search.group(2), 'white', attrs=['bold'])
+				new_line += line[search.end(2):]
+				tb_lines[line_no] = new_line
+		line = tb_lines[-1]
+		if line.find(':'):
+			idx = line.find(':')
+			line = termcolor.colored(line[:idx], 'red', attrs=['bold']) + line[idx:]
+		if line.endswith(os.linesep):
+			line = line[:-len(os.linesep)]
+		tb_lines[-1] = line
+		return ''.join(tb_lines)
