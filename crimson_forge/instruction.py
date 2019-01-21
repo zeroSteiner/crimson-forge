@@ -150,10 +150,6 @@ class Instruction(object):
 	def bytes_hex(self):
 		return binascii.b2a_hex(bytes(self)).decode('utf-8')
 
-	@property
-	def source(self):
-		return "{0} {1}".format(self.cs_instruction.mnemonic, self.cs_instruction.op_str).strip()
-
 	# needs to come after
 	def depends_on(self, ins):
 		"""
@@ -232,3 +228,7 @@ class Instruction(object):
 				stream = getattr(sys, stream.lower())
 			print(formatted, file=stream)
 		return formatted
+
+	@property
+	def source(self):
+		return "{0} {1}".format(self.cs_instruction.mnemonic, self.cs_instruction.op_str).strip()

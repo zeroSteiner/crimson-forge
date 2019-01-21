@@ -65,6 +65,9 @@ class _InstructionsProxy(base.InstructionsProxy):
 		raise KeyError('instruction address not found')
 
 class _Blocks(collections.OrderedDict):
+	def for_address(self, address):
+		return next((block for block in self.values() if address in block.instructions), None)
+
 	def to_graphviz(self):
 		graph = graphviz.Digraph()
 		for block in self.values():
@@ -80,9 +83,6 @@ class _Blocks(collections.OrderedDict):
 				else:
 					graph.node(str(child_address), "0x:{:04x}".format(child_address), shape='plain')
 		return graph
-
-	def for_address(self, address):
-		return next((block for block in self.values() if address in block.instructions), None)
 
 # todo: rename this to ExecutableSegment for accuracy
 class Binary(base.Base):
@@ -101,9 +101,30 @@ class Binary(base.Base):
 			self.vex_instructions.update(block.vex_instructions.items())
 		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.blocks)
 
-	@property
-	def base(self):
-		return self.address
+	def __process_irsb_jump(self, jump):
+		# get the parent basic-block which should already exist
+		bblock = self.blocks.for_address(jump.from_address)
+		if bblock is None:
+			raise RuntimeError('parent basic-block is None')
+		# check if the jump target belongs to an existing block
+		jmp_bblock = self.blocks.for_address(jump.to_address)
+		if jmp_bblock:
+			connect_to_self = jmp_bblock is bblock
+			if jump.to_address != jmp_bblock.address:
+				jmp_bblock = jmp_bblock.split(jump.to_address)
+				self.blocks[jmp_bblock.address] = jmp_bblock
+			if connect_to_self:
+				jmp_bblock.connect_to(jmp_bblock)
+			bblock.connect_to(jmp_bblock)
+		else:
+			# if no block is found, build a new one from the blob (if there is data left)
+			blob = self.bytes[jump.to_address - self.base:]
+			if blob:
+				self._process_irsb(self.__vex_lift(blob, jump.to_address), parent=self.blocks.for_address(jump.from_address))
+
+	def __vex_lift(self, blob, base=None):
+		base = self.base if base is None else base
+		return ir.lift(blob, base, self.arch)
 
 	def _disassemble(self, blob):
 		yield from self.arch.capstone.disasm(blob, self.base)
@@ -140,30 +161,9 @@ class Binary(base.Base):
 				self.__process_irsb_jump(jump)
 		return bblock
 
-	def __process_irsb_jump(self, jump):
-		# get the parent basic-block which should already exist
-		bblock = self.blocks.for_address(jump.from_address)
-		if bblock is None:
-			raise RuntimeError('parent basic-block is None')
-		# check if the jump target belongs to an existing block
-		jmp_bblock = self.blocks.for_address(jump.to_address)
-		if jmp_bblock:
-			connect_to_self = jmp_bblock is bblock
-			if jump.to_address != jmp_bblock.address:
-				jmp_bblock = jmp_bblock.split(jump.to_address)
-				self.blocks[jmp_bblock.address] = jmp_bblock
-			if connect_to_self:
-				jmp_bblock.connect_to(jmp_bblock)
-			bblock.connect_to(jmp_bblock)
-		else:
-			# if no block is found, build a new one from the blob (if there is data left)
-			blob = self.bytes[jump.to_address - self.base:]
-			if blob:
-				self._process_irsb(self.__vex_lift(blob, jump.to_address), parent=self.blocks.for_address(jump.from_address))
-
-	def __vex_lift(self, blob, base=None):
-		base = self.base if base is None else base
-		return ir.lift(blob, base, self.arch)
+	@property
+	def base(self):
+		return self.address
 
 	@classmethod
 	def from_source(cls, source, arch, base=0x1000):

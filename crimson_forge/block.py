@@ -97,6 +97,29 @@ class BasicBlock(base.Base):
 		self.ir_tyenv = ir_tyenv
 		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.vex_instructions, ir_tyenv)
 
+	def _exit_for_leaf(self, leaf_node, exit_node):
+		t_instructions = tuple(self.instructions.values())
+		if t_instructions[-1] != exit_node:
+			# this basic-block is corrupted, the instructions continue past an
+			# explicit modification to the instruction pointer such as a call or
+			# jump
+			raise ValueError('the exit node was not identified as the last instruction')
+		for ins in reversed(t_instructions):
+			if ins == leaf_node:
+				break
+			if not any(reg.in_iterable(ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
+				return ins
+		return exit_node
+
+	def _split_new(self, addresses):
+		cls = self.__class__
+		blob_start = addresses[0] - self.address
+		blob_end = (addresses[-1] - self.address) + self.cs_instructions[addresses[-1]].size
+		blob = self.bytes[blob_start:blob_end]
+		cs_ins = collections.OrderedDict((a, self.cs_instructions[a]) for a in addresses)
+		vex_ins = collections.OrderedDict((a, self.vex_instructions[a]) for a in addresses)
+		return cls(blob, self.arch, addresses[0], cs_ins, vex_ins, self.ir_tyenv)
+
 	def connect_to(self, child):
 		if len(self.children) == 2 and child not in self.children:
 			raise RuntimeError('basic-block can not have more than two children')
@@ -121,14 +144,44 @@ class BasicBlock(base.Base):
 		vex_instructions = ir.irsb_to_instructions(irsb)
 		return cls(blob, irsb.arch, irsb.addr, cs_instructions, vex_instructions, ir_tyenv=irsb.tyenv)
 
-	def _split_new(self, addresses):
-		cls = self.__class__
-		blob_start = addresses[0] - self.address
-		blob_end = (addresses[-1] - self.address) + self.cs_instructions[addresses[-1]].size
-		blob = self.bytes[blob_start:blob_end]
-		cs_ins = collections.OrderedDict((a, self.cs_instructions[a]) for a in addresses)
-		vex_ins = collections.OrderedDict((a, self.vex_instructions[a]) for a in addresses)
-		return cls(blob, self.arch, addresses[0], cs_ins, vex_ins, self.ir_tyenv)
+	def is_direct_child_of(self, address):
+		if not address in self.children:
+			return False
+		last_address, last_instruction = tuple(self.cs_instructions.items())[-1]
+		return last_address + last_instruction.size == address
+
+	def is_direct_parent_of(self, address):
+		parent = self.parents.get(address)
+		if parent is None:
+			return False
+		return parent.is_direct_child_of(self.address)
+
+	def permutation(self):
+		constraints = self.to_digraph()
+		instructions = collections.deque()
+		# the initial choices are any node without a predecessor (dependency)
+		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
+		while choices:  # continue to make selections while we have choices
+			selection = random.choice(tuple(choices))  # make a selection
+			choices.remove(selection)
+			instructions.append(selection)
+			# analyze the nodes which are successors (dependants) of the selection
+			for successor in constraints.successors(selection):
+				# skip the node if it's already been added
+				if successor in instructions:
+					continue
+				# or if all of it's predecessors (dependencies) have not been met
+				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
+					continue
+				choices.add(successor)
+
+		blob = b''.join(bytes(ins) for ins in instructions)
+		return self.__class__.from_bytes(blob, self.arch, self.address)
+
+	def permutation_count(self):
+		constraints = self.to_digraph()
+		all_permutations = path_permutations(constraints)
+		return len(all_permutations)
 
 	def split(self, address):
 		# split this block at the specified address (which can not be the first address) into two,
@@ -195,20 +248,6 @@ class BasicBlock(base.Base):
 				graph.add_edge(parent, child)
 		return graph
 
-	def _exit_for_leaf(self, leaf_node, exit_node):
-		t_instructions = tuple(self.instructions.values())
-		if t_instructions[-1] != exit_node:
-			# this basic-block is corrupted, the instructions continue past an
-			# explicit modification to the instruction pointer such as a call or
-			# jump
-			raise ValueError('the exit node was not identified as the last instruction')
-		for ins in reversed(t_instructions):
-			if ins == leaf_node:
-				break
-			if not any(reg.in_iterable(ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
-				return ins
-		return exit_node
-
 	def to_graphviz(self):
 		n_graph = self.to_digraph()
 		g_graph = graphviz.Digraph()
@@ -221,42 +260,3 @@ class BasicBlock(base.Base):
 				constraint='true'
 			)
 		return g_graph
-
-	def is_direct_child_of(self, address):
-		if not address in self.children:
-			return False
-		last_address, last_instruction = tuple(self.cs_instructions.items())[-1]
-		return last_address + last_instruction.size == address
-
-	def is_direct_parent_of(self, address):
-		parent = self.parents.get(address)
-		if parent is None:
-			return False
-		return parent.is_direct_child_of(self.address)
-
-	def permutation(self):
-		constraints = self.to_digraph()
-		instructions = collections.deque()
-		# the initial choices are any node without a predecessor (dependency)
-		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
-		while choices:  # continue to make selections while we have choices
-			selection = random.choice(tuple(choices))  # make a selection
-			choices.remove(selection)
-			instructions.append(selection)
-			# analyze the nodes which are successors (dependants) of the selection
-			for successor in constraints.successors(selection):
-				# skip the node if it's already been added
-				if successor in instructions:
-					continue
-				# or if all of it's predecessors (dependencies) have not been met
-				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
-					continue
-				choices.add(successor)
-
-		blob = b''.join(bytes(ins) for ins in instructions)
-		return self.__class__.from_bytes(blob, self.arch, self.address)
-
-	def permutation_count(self):
-		constraints = self.to_digraph()
-		all_permutations = path_permutations(constraints)
-		return len(all_permutations)

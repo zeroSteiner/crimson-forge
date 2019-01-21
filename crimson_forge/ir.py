@@ -65,16 +65,16 @@ class IRJump(object):
 		return self._arch
 
 	@property
-	def to_address(self):
-		return self._to_address
-
-	@property
 	def from_address(self):
 		return self._from_address
 
 	@property
 	def kind(self):
 		return self._kind
+
+	@property
+	def to_address(self):
+		return self._to_address
 
 # hashable, immutable
 class IRRegister(object):
@@ -101,14 +101,6 @@ class IRRegister(object):
 	@property
 	def arch(self):
 		return self._arch
-
-	@property
-	def name(self):
-		return self.arch.translate_register_name(self._positions.start // 8, self.width // 8)
-
-	@property
-	def width(self):
-		return len(self._positions)
 
 	@classmethod
 	def from_arch(cls, arch, name):
@@ -152,6 +144,14 @@ class IRRegister(object):
 
 	def in_iterable(self, iterable):
 		return any(self & other_reg for other_reg in iterable)
+
+	@property
+	def name(self):
+		return self.arch.translate_register_name(self._positions.start // 8, self.width // 8)
+
+	@property
+	def width(self):
+		return len(self._positions)
 
 def lift(blob, base, arch):
 	return pyvex.lift(blob, base, arch, opt_level=OPT_LEVEL_NO_OPTIMIZATION)
