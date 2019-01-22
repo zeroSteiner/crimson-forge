@@ -80,9 +80,9 @@ def register_postprocessor(*architectures, byte_mask=None, mnemonic=None):
 				if not match_mask(ins.bytes, byte_mask, byte_width=ins.arch.byte_width):
 					return
 			if mnemonic is not None:
-				if ins.cs_instruction not in mnemonic:
+				if ins.cs_instruction.mnemonic.lower() not in mnemonic:
 					return
-			logger.info('using instruction postprocessor: ' + function.__name__)
+			logger.info('Using instruction postprocessor: ' + function.__name__)
 			return function(ins)
 		for arch in architectures:
 			postprocessors[arch.name].append(wrapper)
@@ -114,11 +114,11 @@ class Instruction(object):
 				self.dirty = True
 				# handle dirty statements on a case-by-case basis
 				if stmt.cee.name in ('amd64g_dirtyhelper_FSTENV', 'x86g_dirtyhelper_FSTENV'):
-					logger.info('encountered handled dirty IR statement: ' + stmt.cee.name)
+					logger.info('Encountered handled dirty IR statement: ' + stmt.cee.name)
 					self.registers.accessed.add(ir.IRRegister.from_arch(self.arch, 'ftop'))
 					self.registers.stored.add(ir.IRRegister.from_arch(self.arch, 'ftop'))
 				else:
-					logger.warning('encountered unhandled dirty IR statement: ' + stmt.cee.name)
+					logger.warning('Encountered unhandled dirty IR statement: ' + stmt.cee.name)
 			elif isinstance(stmt, pyvex.stmt.Exit):
 				if stmt.jumpkind != ir.JumpKind.MapFail:
 					self.registers.modified.add(ir.IRRegister.from_ir_stmt_exit(arch, stmt, ir_tyenv))

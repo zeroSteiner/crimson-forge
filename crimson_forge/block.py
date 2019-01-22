@@ -190,7 +190,7 @@ class BasicBlock(base.Base):
 		# split this block at the specified address (which can not be the first address) into two,
 		# this instance takes on the attributes of the lower block which maintains it's address while
 		# a new block at the specified address is returned
-		logger.info('splitting basic-block 0x%04x at 0x%04x', self.address, address)
+		logger.info('Splitting basic-block 0x%04x at 0x%04x', self.address, address)
 		addresses = tuple(self.cs_instructions.keys())
 		index = addresses.index(address)
 		if not index:
