@@ -92,3 +92,7 @@ class Base(object):
 	@property
 	def bytes_hex(self):
 		return binascii.b2a_hex(self.bytes)
+
+	@property
+	def size(self):
+		return len(self.bytes)

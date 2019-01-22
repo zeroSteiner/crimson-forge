@@ -32,6 +32,7 @@
 
 import collections
 import collections.abc
+import logging
 
 import crimson_forge.base as base
 import crimson_forge.block as block
@@ -39,6 +40,8 @@ import crimson_forge.ir as ir
 import crimson_forge.utilities as utilities
 
 import graphviz
+
+logger = logging.getLogger('crimson-forge.binary')
 
 def _irsb_jumps(irsb):
 	jumps = collections.deque()
@@ -66,8 +69,12 @@ class _InstructionsProxy(base.InstructionsProxy):
 
 class _Blocks(collections.OrderedDict):
 	def for_address(self, address):
-		return next((block for block in self.values() if address in block.instructions), None)
-
+		for blk in self.values():
+			if isinstance(blk, block.BasicBlock) and address in blk.instructions:
+				return blk
+			elif isinstance(blk, block.DataBlock) and blk.address <= address <= (blk.address + blk.size):
+				return blk
+		return None
 	def to_graphviz(self):
 		graph = graphviz.Digraph()
 		for block in self.values():
@@ -91,7 +98,7 @@ class Binary(base.Base):
 		self.cs_instructions.update((ins.address, ins) for ins in self._disassemble(blob))
 		self.blocks = _Blocks()
 		for ins_addr in self.cs_instructions:
-			if any(ins_addr in block.instructions for block in self.blocks.values()):
+			if self.blocks.for_address(ins_addr) is not None:
 				continue
 			self._process_irsb(self.__vex_lift(blob[ins_addr-base:], base=ins_addr))
 
@@ -133,6 +140,19 @@ class Binary(base.Base):
 		offset = irsb.addr - self.base
 		blob = self.bytes[offset:offset + irsb.size]
 		cs_instructions = collections.OrderedDict()
+		if irsb.size == 0 and irsb.jumpkind == ir.JumpKind.NoDecode:
+			size = 0
+			while self.blocks.for_address(offset + size + 1) is None and offset + size < self.size:
+				size += 1
+			blob = self.bytes[offset:offset + size]
+			bblock = self.blocks.for_address(irsb.addr - 1)
+			if bblock is None:
+				logger.info("Creating data-block from IRSB ending with %s at 0x%04x", irsb.jumpkind, irsb.addr)
+				bblock = block.DataBlock(blob, self.arch, irsb.addr)
+				self.blocks[bblock.address] = bblock
+			else:
+				bblock.bytes += blob
+			return
 		cs_instructions.update((addr, self.cs_instructions[addr]) for addr in irsb.instruction_addresses)
 		bblock = block.BasicBlock.from_irsb(blob, cs_instructions, irsb)
 		if parent is not None:
@@ -157,7 +177,7 @@ class Binary(base.Base):
 					self.blocks[sub_bblock.address] = sub_bblock
 				self.__process_irsb_jump(jump)
 			if ir.JumpKind.returns(irsb.jumpkind):
-				jump = ir.IRJump(self.arch, bblock.address + len(bblock.bytes), tuple(bblock.cs_instructions.keys())[-1])
+				jump = ir.IRJump(self.arch, bblock.address + bblock.size, tuple(bblock.cs_instructions.keys())[-1])
 				self.__process_irsb_jump(jump)
 		return bblock
 
@@ -177,12 +197,25 @@ class Binary(base.Base):
 		return cls.from_source(source *args, **kwargs)
 
 	def permutation(self):
-		blocks = [block.permutation() for block in self.blocks.values()]
-		blob = b''.join(block.bytes for block in blocks)
+		blob = self.permutation_bytes()
 		return self.__class__(blob, self.arch, self.base)
+
+	def permutation_bytes(self):
+		blob = b''
+		for blk in self.blocks.values():
+			if isinstance(blk, block.DataBlock):
+				blob += blk.bytes
+			elif isinstance(blk, block.BasicBlock):
+				permutation = blk.permutation()
+				blob += permutation.bytes
+			else:
+				raise TypeError('block type is not supported')
+		return blob
 
 	def permutation_count(self):
 		count = 1
-		for block in self.blocks.values():
-			count *= block.permutation_count()
+		for blk in self.blocks.values():
+			if not isinstance(blk, block.BasicBlock):
+				continue
+			count *= blk.permutation_count()
 		return count

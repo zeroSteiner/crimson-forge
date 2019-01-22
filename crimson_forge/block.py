@@ -90,6 +90,9 @@ class _InstructionsProxy(base.InstructionsProxy):
 	def _resolve_ir(self, address):
 		return self._vex_instructions[address], self._ir_tyenv
 
+class DataBlock(base.Base):
+	pass
+
 class BasicBlock(base.Base):
 	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv):
 		super(BasicBlock, self).__init__(blob, arch, address)

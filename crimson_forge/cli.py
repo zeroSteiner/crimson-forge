@@ -115,14 +115,16 @@ def main():
 
 	arch = architectures[args.arch]
 	crimson_forge.print_status('architecture set as: ' + arch.name)
+	input_data_length = None
 	if args.input_format is DataFormat.RAW:
 		data = args.input.read()
+		input_data_length = len(data)
 		crimson_forge.print_status('input hash (sha-256): ' + hash(data))
 		binary = crimson_forge.Binary(data, arch)
 	elif args.input_format is DataFormat.SOURCE:
 		binary = crimson_forge.Binary.from_source(args.input.read().decode('utf-8'), arch)
 
-	crimson_forge.print_status("total basic-blocks: {0:,}".format(len(binary.blocks)))
+	crimson_forge.print_status("total blocks: {0:,}".format(len(binary.blocks)))
 	permutation_count = binary.permutation_count()
 	instruction_count = len(binary.instructions)
 	crimson_forge.print_status("total instructions: {0:,}".format(instruction_count))
@@ -130,9 +132,12 @@ def main():
 	score = math.log(permutation_count, math.factorial(instruction_count))
 	crimson_forge.print_status("randomization potential score: {0:0.5f}".format(score))
 
-	new_binary = binary.permutation()
+	data = binary.permutation_bytes()
+	if input_data_length is not None and input_data_length != len(data):
+		crimson_forge.print_error("output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
+	else:
+		crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)))
 	if args.output:
-		data = new_binary.bytes
 		crimson_forge.print_status('output hash (sha-256): ' + hash(data))
 		args.output.write(data)
 	else:
