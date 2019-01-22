@@ -32,6 +32,7 @@
 
 import binascii
 import collections
+import functools
 import logging
 import sys
 
@@ -46,11 +47,46 @@ logger = logging.getLogger('crimson-forge.instruction')
 class TaintTrackingError(RuntimeError):
 	pass
 
+def match_mask(data, mask, byte_width=8):
+	data = bytearray(data)
+	integer = 0
+	while data:
+		integer <<= byte_width
+		integer |= data.pop(0)
+	for mask_bit in reversed(mask):
+		if mask_bit == ' ':
+			continue  # ignore spaces which can be used for breaking up bytes
+		real_bit = (integer & 1)
+		integer >>= 1
+		if mask_bit == '0':
+			if real_bit == 0:
+				continue
+		elif mask_bit == '1':
+			if real_bit == 1:
+				continue
+		else:
+			continue
+		return False
+	return integer == 0
+
 postprocessors = collections.defaultdict(list)
-def register_postprocessor(*architectures):
+def register_postprocessor(*architectures, byte_mask=None, mnemonic=None):
+	if isinstance(mnemonic, str):
+		mnemonic = (mnemonic,)
 	def decorator(function):
+		@functools.wraps(function)
+		def wrapper(ins):
+			if byte_mask is not None:
+				if not match_mask(ins.bytes, byte_mask, byte_width=ins.arch.byte_width):
+					return
+			if mnemonic is not None:
+				if ins.cs_instruction not in mnemonic:
+					return
+			logger.info('using instruction postprocessor: ' + function.__name__)
+			return function(ins)
 		for arch in architectures:
-			postprocessors[arch.name].append(function)
+			postprocessors[arch.name].append(wrapper)
+		return wrapper
 	return decorator
 
 _InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
@@ -226,15 +262,32 @@ class Instruction(object):
 amd64 = archinfo.ArchAMD64()
 x86 = archinfo.ArchX86()
 
-@register_postprocessor(amd64, x86)
-def x87_fpu_instructions(ins):
-	# FPU instructions record the Instruction Pointer, see section 8.1.8 of the
-	# Intel 64 and IA-32 Architectures Software Developer's Manual
-	ins_bytes = ins.bytes
-	if len(ins_bytes) != 2 or ins_bytes[0] != 0xd9:
-		return
-	if 0xe8 <= ins_bytes[1] <= 0xee:
-		ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))
-		# this should also mark a registers as being modified since the
-		# instruction pointer is copied into it, but archinfo.ArchX86 does not
-		# seem to have floating-point instruction and data pointer registers
+# FPU instructions record the Instruction Pointer, see section 8.1.8 of the Intel 64 and IA-32 Architectures
+# Software Developer's Manual
+
+# todo: this needs to account for additional x87 instructions accessing the instruction pointer
+# this should also mark a registers as being modified since the instruction pointer is copied into it, but
+# archinfo.ArchX86 does not seem to have floating-point instruction and data pointer registers
+@register_postprocessor(amd64, x86, mnemonic=('fadd', 'faddp', 'fiadd'))
+def x87_fpu_add(ins):
+	ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))
+
+@register_postprocessor(amd64, x86, mnemonic=('fdiv', 'fdivp', 'fidiv'))
+def x87_fpu_div(ins):
+	ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))
+
+@register_postprocessor(amd64, x86, mnemonic=('fld',))
+def x87_fpu_load(ins):
+	ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))
+
+@register_postprocessor(amd64, x86, byte_mask='11011001 11101###')
+def x87_fpu_load_constant(ins):
+	ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))
+
+@register_postprocessor(amd64, x86, mnemonic=('fmul', 'fmulp', 'fimul'))
+def x87_fpu_mul(ins):
+	ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))
+
+@register_postprocessor(amd64, x86, mnemonic=('fsub', 'fsubp', 'fisub'))
+def x87_fpu_sub(ins):
+	ins.registers.accessed.add(ir.IRRegister.from_arch(ins.arch, 'ip'))

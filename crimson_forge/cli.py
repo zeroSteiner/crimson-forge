@@ -114,6 +114,7 @@ def main():
 		crimson_forge.print_status("seeding the random number generator with {0} (0x{0:x})".format(args.prng_seed))
 
 	arch = architectures[args.arch]
+	crimson_forge.print_status('architecture set as: ' + arch.name)
 	if args.input_format is DataFormat.RAW:
 		data = args.input.read()
 		crimson_forge.print_status('input hash (sha-256): ' + hash(data))
