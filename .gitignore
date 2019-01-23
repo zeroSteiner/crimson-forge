@@ -1,5 +1,7 @@
 *.asm
 *.gv
+*.ods
+*.ods#
 *.pdf
 *.py[cod]
 

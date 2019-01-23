@@ -88,12 +88,15 @@ def _handle_output(args, arch, data):
 
 def _handle_output_pe(args, arch, data):
 	if isinstance(arch, archinfo.ArchX86):
-		pe_arch = lief.PE.PE_TYPE.PE32
+		pe_binary = lief.PE.Binary('pe_from_scratch', lief.PE.PE_TYPE.PE32)
+		pe_binary.optional_header.imagebase = 0x400000
 	elif isinstance(arch, archinfo.ArchAMD64):
-		pe_arch = lief.PE.PE_TYPE.PE32_PLUS
+		pe_binary = lief.PE.Binary('pe_from_scratch', lief.PE.PE_TYPE.PE32_PLUS)
+		pe_binary.optional_header.imagebase = 0x140000000
 	else:
 		crimson_forge.print_error('unsupported architecture for PE output: ' + arch.name)
-	pe_binary = lief.PE.Binary('pe_from_scratch', pe_arch)
+		return
+
 	section_text = lief.PE.Section('.text')
 	section_text.characteristics = 0x60000020
 	section_text.content = data
@@ -101,8 +104,12 @@ def _handle_output_pe(args, arch, data):
 	pe_binary.add_section(section_text)
 	pe_binary.optional_header.addressof_entrypoint = section_text.virtual_address
 
+	# todo: these import should be user-configurable but default to sane profiles of legitimate functionality (i.e. file operations)
 	kernel32 = pe_binary.add_library('kernel32.dll')
+	kernel32.add_entry('CloseHandle')
 	kernel32.add_entry('ExitProcess')
+	user32 = pe_binary.add_library('user32.dll')
+	user32.add_entry('MessageBoxA')
 
 	builder = lief.PE.Builder(pe_binary)
 	builder.build_imports(True)
