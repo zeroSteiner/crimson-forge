@@ -107,8 +107,8 @@ class IRRegister(object):
 	@classmethod
 	def from_arch(cls, arch, name):
 		offset, size = arch.registers[name]
-		offset *= 8
-		return cls(arch, range(offset, offset + (size * 8)))
+		offset *= arch.byte_width
+		return cls(arch, range(offset, offset + (size * arch.byte_width)))
 
 	@classmethod
 	def from_ir(cls, arch, offset, size=None):
@@ -118,21 +118,21 @@ class IRRegister(object):
 
 	@classmethod
 	def from_ir_expr_get(cls, arch, expr, ir_tyenv):
-		return cls.from_ir(arch, expr.offset * 8, expr.result_size(ir_tyenv))
+		return cls.from_ir(arch, expr.offset * arch.byte_width, expr.result_size(ir_tyenv))
 
 	@classmethod
 	def from_ir_expr_geti(cls, arch, expr, ir_tyenv):
-		offset = expr.descr.base * 8
+		offset = expr.descr.base * arch.byte_width
 		size = pyvex.const.get_type_size(expr.descr.elemTy) * expr.descr.nElems
 		return cls.from_ir(arch, offset, size=size)
 
 	@classmethod
 	def from_ir_stmt_exit(cls, arch, stmt, ir_tyenv):
-		return cls.from_ir(arch, stmt.offsIP * 8)
+		return cls.from_ir(arch, stmt.offsIP * arch.byte_width)
 
 	@classmethod
 	def from_ir_stmt_put(cls, arch, stmt, ir_tyenv):
-		return cls.from_ir(arch, stmt.offset * 8, stmt.data.result_size(ir_tyenv))
+		return cls.from_ir(arch, stmt.offset * arch.byte_width, stmt.data.result_size(ir_tyenv))
 
 	@classmethod
 	def from_ir_stmt_puti(cls, arch, stmt, ir_tyenv):
@@ -140,7 +140,7 @@ class IRRegister(object):
 		# state, this treats the entire range as a single registers tracking the
 		# entire range as a single segment
 		# see: https://github.com/angr/vex/blob/4bdf4da8e0208e8ebf0a728d0477aebfba890f93/pub/libvex_ir.h#L2001-L2035
-		offset = stmt.descr.base * 8
+		offset = stmt.descr.base * arch.byte_width
 		size = pyvex.const.get_type_size(stmt.descr.elemTy) * stmt.descr.nElems
 		return cls.from_ir(arch, offset, size=size)
 
@@ -149,7 +149,7 @@ class IRRegister(object):
 
 	@property
 	def name(self):
-		return self.arch.translate_register_name(self._positions.start // 8, self.width // 8)
+		return self.arch.translate_register_name(self._positions.start // self.arch.byte_width, self.width // self.arch.byte_width)
 
 	@property
 	def width(self):
