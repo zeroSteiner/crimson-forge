@@ -39,6 +39,7 @@ import crimson_forge.block as block
 import crimson_forge.ir as ir
 import crimson_forge.utilities as utilities
 
+import capstone
 import graphviz
 
 logger = logging.getLogger('crimson-forge.binary')
@@ -75,18 +76,23 @@ class _Blocks(collections.OrderedDict):
 			elif isinstance(blk, block.DataBlock) and blk.address <= address <= (blk.address + blk.size):
 				return blk
 		return None
+
 	def to_graphviz(self):
 		graph = graphviz.Digraph()
-		for block in self.values():
+		for blk in self.values():
+			if isinstance(blk, block.DataBlock):
+				continue
 			label = "<<table border=\"0\" cellborder=\"0\" cellspacing=\"1\">"
-			for line in block.instructions.pp_asm(stream=None).split('\n'):
-				label += "<tr><td align=\"left\">{0}</td></tr>".format(line)
+			for line in blk.instructions.pp_asm(stream=None).split('\n'):
+				label += "<tr><td align=\"left\">'{0}'</td></tr>".format(line)
 			label += "</table>>"
-			graph.node(str(block.address), label=label, fontname='courier new', shape='rectangle')
-		for block in self.values():
-			for child_address in block.children:
+			graph.node(str(blk.address), label=label, fontname='courier new', shape='rectangle')
+		for blk in self.values():
+			if isinstance(blk, block.DataBlock):
+				continue
+			for child_address in blk.children:
 				if child_address in self:
-					graph.edge(str(block.address), str(child_address), constraint='true')
+					graph.edge(str(blk.address), str(child_address), constraint='true')
 				else:
 					graph.node(str(child_address), "0x:{:04x}".format(child_address), shape='plain')
 		return graph
@@ -95,9 +101,15 @@ class _Blocks(collections.OrderedDict):
 class Binary(base.Base):
 	def __init__(self, blob, arch, base=0x1000):
 		super(Binary, self).__init__(blob, arch, base)
+		self._md = capstone.Cs(self.arch.cs_arch, self.arch.cs_mode)
+		self._md.detail = True
+		# the mnemonic filter in some of the instruction post-processors requires intel syntax and not at&t so
+		# explicitly set it here
+		self._md.syntax = capstone.CS_OPT_SYNTAX_INTEL
+
 		self.cs_instructions.update((ins.address, ins) for ins in self._disassemble(blob))
 		self.blocks = _Blocks()
-		for ins_addr in self.cs_instructions:
+		for ins_addr in tuple(self.cs_instructions.keys()):
 			if self.blocks.for_address(ins_addr) is not None:
 				continue
 			self._process_irsb(self.__vex_lift(blob[ins_addr-base:], base=ins_addr))
@@ -133,8 +145,9 @@ class Binary(base.Base):
 		base = self.base if base is None else base
 		return ir.lift(blob, base, self.arch)
 
-	def _disassemble(self, blob):
-		yield from self.arch.capstone.disasm(blob, self.base)
+	def _disassemble(self, blob, base=None):
+		base = self.base if base is None else base
+		yield from self._md.disasm(blob, base)
 
 	def _process_irsb(self, irsb, parent=None):
 		offset = irsb.addr - self.base
@@ -142,7 +155,7 @@ class Binary(base.Base):
 		cs_instructions = collections.OrderedDict()
 		if irsb.size == 0 and irsb.jumpkind == ir.JumpKind.NoDecode:
 			size = 0
-			while self.blocks.for_address(offset + size + 1) is None and offset + size < self.size:
+			while self.blocks.for_address(self.base + offset + size) is None and offset + size < self.size:
 				size += 1
 			blob = self.bytes[offset:offset + size]
 			bblock = self.blocks.for_address(irsb.addr - 1)
@@ -153,7 +166,16 @@ class Binary(base.Base):
 			else:
 				bblock.bytes += blob
 			return
-		cs_instructions.update((addr, self.cs_instructions[addr]) for addr in irsb.instruction_addresses)
+		for addr in irsb.instruction_addresses:
+			if addr not in self.cs_instructions:
+				cs_ins = next(self._disassemble(self.bytes[addr - self.base:], addr), None)
+				if cs_ins is None:
+					logger.error("Failed to disassemble non-existent instruction referenced by the IRSB at 0x{:04x}".format(addr))
+					raise RuntimeError('failed to disassemble referenced instruction')
+				logger.debug("Disassembled non-existent instruction referenced by the IRSB at 0x{:04x}".format(addr))
+				self.cs_instructions[addr] = cs_ins
+			cs_instructions[addr] = self.cs_instructions[addr]
+
 		bblock = block.BasicBlock.from_irsb(blob, cs_instructions, irsb)
 		if parent is not None:
 			parent.connect_to(bblock)
