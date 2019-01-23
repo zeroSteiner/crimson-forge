@@ -46,10 +46,12 @@ import crimson_forge.utilities
 import archinfo
 import boltons.timeutils
 import boltons.strutils
+import lief
 import smoke_zephyr.utilities
 
 HELP_EPILOG = """\
 data format choices:
+  pe         a portable executable
   raw        raw executable code
   source     assembly source code
 """
@@ -61,6 +63,7 @@ architectures = {
 
 @enum.unique
 class DataFormat(enum.Enum):
+	PE = 'pe'
 	RAW = 'raw'
 	SOURCE = 'source'
 
@@ -74,6 +77,39 @@ def argtype_data_format(value):
 
 def hash(data, algorithm='sha256'):
 	return hashlib.new(algorithm, data).hexdigest()
+
+def _handle_output(args, arch, data):
+	if args.output_format == DataFormat.RAW:
+		args.output.write(data)
+	elif args.output_format == DataFormat.PE:
+		_handle_output_pe(args, arch, data)
+	else:
+		crimson_forge.print_error('unsupported output format: ' + args.input_format)
+
+def _handle_output_pe(args, arch, data):
+	if isinstance(arch, archinfo.ArchX86):
+		pe_arch = lief.PE.PE_TYPE.PE32
+	elif isinstance(arch, archinfo.ArchAMD64):
+		pe_arch = lief.PE.PE_TYPE.PE32_PLUS
+	else:
+		crimson_forge.print_error('unsupported architecture for PE output: ' + arch.name)
+	pe_binary = lief.PE.Binary('pe_from_scratch', pe_arch)
+	section_text = lief.PE.Section('.text')
+	section_text.characteristics = 0x60000020
+	section_text.content = data
+	section_text.virtual_address = 0x1000
+	pe_binary.add_section(section_text)
+	pe_binary.optional_header.addressof_entrypoint = section_text.virtual_address
+
+	kernel32 = pe_binary.add_library('kernel32.dll')
+	kernel32.add_entry('ExitProcess')
+
+	builder = lief.PE.Builder(pe_binary)
+	builder.build_imports(True)
+	builder.build()
+	pe_data = bytes(builder.get_build())
+	crimson_forge.print_status('pe output hash (sha-256): ' + hash(pe_data))
+	args.output.write(pe_data)
 
 def main():
 	start_time = datetime.datetime.utcnow()
@@ -95,6 +131,7 @@ def main():
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture')
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format')
 	parser.add_argument('-v', '--version', action='version', version='%(prog)s Version: ' + crimson_forge.__version__)
+	parser.add_argument('--output-format', dest='output_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the output format')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
@@ -124,6 +161,9 @@ def main():
 		binary = crimson_forge.Binary(data, arch)
 	elif args.input_format is DataFormat.SOURCE:
 		binary = crimson_forge.Binary.from_source(args.input.read().decode('utf-8'), arch)
+	else:
+		crimson_forge.print_error('unsupported input format: ' + args.input_format)
+		return
 
 	crimson_forge.print_status("total blocks: {0:,}".format(len(binary.blocks)))
 	instruction_count = len(binary.instructions)
@@ -136,12 +176,12 @@ def main():
 
 	data = binary.permutation_bytes()
 	if input_data_length is not None and input_data_length != len(data):
-		crimson_forge.print_error("output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
+		crimson_forge.print_error("raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
 	else:
 		crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)) + ' (correct)')
 	if args.output:
-		crimson_forge.print_status('output hash (sha-256): ' + hash(data))
-		args.output.write(data)
+		crimson_forge.print_status('raw output hash (sha-256): ' + hash(data))
+		_handle_output(args, arch, data)
 	else:
 		crimson_forge.print_status('no output file specified')
 
