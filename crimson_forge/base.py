@@ -67,7 +67,7 @@ class InstructionsProxy(collections.abc.Mapping):
 
 	def pp_asm(self, stream='stdout'):
 		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.values()]
-		formatted = tabulate.tabulate(table, tablefmt='plain')
+		formatted = tabulate.tabulate(table, disable_numparse=True, tablefmt='plain')
 		if stream is not None:
 			if isinstance(stream, str) and stream.lower() in ('stderr', 'stdout'):
 				stream = getattr(sys, stream.lower())

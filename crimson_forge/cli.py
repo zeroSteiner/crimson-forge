@@ -96,6 +96,7 @@ def main():
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format')
 	parser.add_argument('-v', '--version', action='version', version='%(prog)s Version: ' + crimson_forge.__version__)
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
+	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
 	parser.add_argument('output', nargs='?', type=argparse.FileType('wb'), help='the optional output file')
 
@@ -125,18 +126,19 @@ def main():
 		binary = crimson_forge.Binary.from_source(args.input.read().decode('utf-8'), arch)
 
 	crimson_forge.print_status("total blocks: {0:,}".format(len(binary.blocks)))
-	permutation_count = binary.permutation_count()
 	instruction_count = len(binary.instructions)
 	crimson_forge.print_status("total instructions: {0:,}".format(instruction_count))
-	crimson_forge.print_status("possible permutations: {0:,}".format(permutation_count))
-	score = math.log(permutation_count, math.factorial(instruction_count))
-	crimson_forge.print_status("randomization potential score: {0:0.5f}".format(score))
+	if args.analyze:
+		permutation_count = binary.permutation_count()
+		crimson_forge.print_status("possible permutations: {0:,}".format(permutation_count))
+		score = math.log(permutation_count, math.factorial(instruction_count))
+		crimson_forge.print_status("randomization potential score: {0:0.5f}".format(score))
 
 	data = binary.permutation_bytes()
 	if input_data_length is not None and input_data_length != len(data):
 		crimson_forge.print_error("output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
 	else:
-		crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)))
+		crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)) + ' (correct)')
 	if args.output:
 		crimson_forge.print_status('output hash (sha-256): ' + hash(data))
 		args.output.write(data)
