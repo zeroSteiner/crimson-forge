@@ -156,7 +156,7 @@ class IRRegister(object):
 		return len(self._positions)
 
 def lift(blob, base, arch):
-	return pyvex.lift(blob, base, arch, opt_level=OPT_LEVEL_NO_OPTIMIZATION)
+	return pyvex.lift(blob, base, arch, collect_data_refs=True, opt_level=OPT_LEVEL_NO_OPTIMIZATION)
 
 def irsb_address_for_statement(irsb, stmt):
 	"""

@@ -183,10 +183,11 @@ class Binary(base.Base):
 		# search blocks to see if any instructions overlap with an existing block and if so
 		# split and propagate relationships
 		for address in tuple(bblock.cs_instructions.keys())[1:]:
-			original_bblock = self.blocks.pop(address, None)
-			if original_bblock is None:
-				continue
-			break
+			existing_bblock = self.blocks.get(address, None)
+			if existing_bblock:
+				bblock.split(existing_bblock.address)
+				bblock.connect_to(existing_bblock)
+				break
 		# we split the original block, so irsb is no longer an accurate representation and
 		# so we skip this step since the relations are already connected
 		else:
