@@ -51,10 +51,16 @@ import lief
 import smoke_zephyr.utilities
 
 HELP_EPILOG = """\
+analysis profile choices:
+  shellcode        analyze the code in the context of inclusive, positionally
+                   independent shellcode, i.e. a metasploit payload
+  executable-file  analyze the code in the context of a traditional executable
+                   file such as a windows portable executable (.exe)
+
 data format choices:
-  pe         a portable executable
-  raw        raw executable code
-  source     assembly source code
+  pe               a portable executable
+  raw              raw executable code
+  source           assembly source code
 """
 
 architectures = {
@@ -68,13 +74,24 @@ class DataFormat(enum.Enum):
 	RAW = 'raw'
 	SOURCE = 'source'
 
-data_formats = tuple(format.value for format in DataFormat)
+@enum.unique
+class AnalysisProfile(enum.Enum):
+	SHELLCODE = 'shellcode'
+	EXECUTABLE_FILE = 'executable-file'
+
 def argtype_data_format(value):
 	try:
 		format_type = DataFormat(value)
 	except ValueError:
 		raise argparse.ArgumentTypeError("{0!r} is not a valid data format".format(value)) from None
 	return format_type
+
+def argtype_analysis_profile(value):
+	try:
+		profile = AnalysisProfile(value)
+	except ValueError:
+		raise argparse.ArgumentTypeError("{0!r} is not a valid analysis profile".format(value)) from None
+	return profile
 
 def hash(data, algorithm='sha256'):
 	return hashlib.new(algorithm, data).hexdigest()
@@ -123,7 +140,7 @@ def main():
 	start_time = datetime.datetime.utcnow()
 	parser = argparse.ArgumentParser(
 		'crimson-forge',
-		description='Crimson Forge CLI',
+		description="Crimson Forge CLI v{0}".format(crimson_forge.__version__),
 		conflict_handler='resolve',
 		epilog=HELP_EPILOG,
 		formatter_class=argparse.RawTextHelpFormatter,
@@ -134,12 +151,13 @@ def main():
 	gc_group.add_argument('--gc-debug-stats', action='store_const', const=gc.DEBUG_STATS, default=0, help='set the DEBUG_STATS flag')
 	log_group = parser.add_argument_group('logging options')
 	log_group.add_argument('--log-level', default=logging.WARNING, choices=('DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'), help='set the log level')
-	log_group.add_argument('--log-name', default='', help='specify the root logger')
+	log_group.add_argument('--log-name', default='crimson-forge', help='specify the root logger')
 
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture')
-	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format')
+	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format (see: data format choices)')
 	parser.add_argument('-v', '--version', action='version', version='%(prog)s Version: ' + crimson_forge.__version__)
-	parser.add_argument('--output-format', dest='output_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the output format')
+	parser.add_argument('--analysis-profile', dest='analysis_profile', default=None, metavar='PROFILE', type=argtype_analysis_profile, help='the analysis profile to use (see: analysis profile choices)')
+	parser.add_argument('--output-format', dest='output_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
@@ -159,6 +177,7 @@ def main():
 		random.seed(args.prng_seed)
 		crimson_forge.print_status("seeding the random number generator with {0} (0x{0:x})".format(args.prng_seed))
 
+	analysis_profile = args.analysis_profile
 	arch = architectures[args.arch]
 	crimson_forge.print_status('architecture set as: ' + arch.name)
 	input_data_length = None
@@ -166,23 +185,29 @@ def main():
 		data = args.input.read()
 		input_data_length = len(data)
 		crimson_forge.print_status('input hash (sha-256): ' + hash(data))
-		binary = crimson_forge.ExecutableSegment(data, arch)
+		exec_seg = crimson_forge.ExecutableSegment(data, arch)
+		analysis_profile = analysis_profile or AnalysisProfile.SHELLCODE
 	elif args.input_format is DataFormat.SOURCE:
-		binary = crimson_forge.ExecutableSegment.from_source(args.input.read().decode('utf-8'), arch)
+		exec_seg = crimson_forge.ExecutableSegment.from_source(args.input.read().decode('utf-8'), arch)
+		analysis_profile = analysis_profile or AnalysisProfile.SHELLCODE
 	else:
 		crimson_forge.print_error('unsupported input format: ' + args.input_format)
 		return
 
-	crimson_forge.print_status("total blocks: {0:,}".format(len(binary.blocks)))
-	instruction_count = len(binary.instructions)
+	crimson_forge.print_status('using analysis profile: ' + analysis_profile.value + (' (auto-detected)' if args.analysis_profile is None else ''))
+	if analysis_profile == AnalysisProfile.SHELLCODE:
+		crimson_forge.analysis.symexec_data_identification(exec_seg)
+
+	crimson_forge.print_status("total blocks: {0:,}".format(len(exec_seg.blocks)))
+	instruction_count = len(exec_seg.instructions)
 	crimson_forge.print_status("total instructions: {0:,}".format(instruction_count))
 	if args.analyze:
-		permutation_count = binary.permutation_count()
+		permutation_count = exec_seg.permutation_count()
 		crimson_forge.print_status("possible permutations: {0:,}".format(permutation_count))
 		score = math.log(permutation_count, math.factorial(instruction_count))
 		crimson_forge.print_status("randomization potential score: {0:0.5f}".format(score))
 
-	data = binary.permutation_bytes()
+	data = exec_seg.permutation_bytes()
 	if input_data_length is not None and input_data_length != len(data):
 		crimson_forge.print_error("raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
 	else:
