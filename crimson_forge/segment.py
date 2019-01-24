@@ -73,9 +73,7 @@ class _InstructionsProxy(base.InstructionsProxy):
 class _Blocks(collections.OrderedDict):
 	def for_address(self, address):
 		for blk in self.values():
-			if isinstance(blk, block.BasicBlock) and address in blk.instructions:
-				return blk
-			elif isinstance(blk, block.DataBlock) and blk.address <= address <= (blk.address + blk.size):
+			if blk.address <= address <= (blk.address + blk.size - 1):
 				return blk
 		return None
 
@@ -165,8 +163,14 @@ class ExecutableSegment(base.Base):
 				bblock = block.DataBlock(blob, self.arch, irsb.addr)
 				self.blocks[bblock.address] = bblock
 			else:
+				if isinstance(bblock, block.BasicBlock):
+					if bblock.address != irsb.addr - 1:
+						bblock = bblock.split(irsb.addr - 1)
+					bblock = bblock.to_data_block()
+					self.blocks[bblock.address] = bblock
 				bblock.bytes += blob
 			return
+
 		for addr in irsb.instruction_addresses:
 			if addr not in self.cs_instructions:
 				cs_ins = next(self._disassemble(self.bytes[addr - self.base:], addr), None)
@@ -201,7 +205,7 @@ class ExecutableSegment(base.Base):
 					self.blocks[sub_bblock.address] = sub_bblock
 				self.__process_irsb_jump(jump)
 			if ir.JumpKind.returns(irsb.jumpkind):
-				jump = ir.IRJump(self.arch, bblock.address + bblock.size, tuple(bblock.cs_instructions.keys())[-1])
+				jump = ir.IRJump(self.arch, bblock.address + bblock.size, tuple(bblock.cs_instructions.keys())[-1], kind=ir.JumpKind.Ret)
 				self.__process_irsb_jump(jump)
 		return bblock
 

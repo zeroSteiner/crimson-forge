@@ -127,7 +127,7 @@ class BasicBlock(base.Base):
 		return cls(blob, self.arch, addresses[0], cs_ins, vex_ins, self.ir_tyenv)
 
 	def connect_to(self, child):
-		if len(self.children) == 2 and child not in self.children:
+		if len(self.children) == 2 and child.address not in self.children:
 			raise RuntimeError('basic-block can not have more than two children')
 		self.children[child.address] = child
 		child.parents[self.address] = self
