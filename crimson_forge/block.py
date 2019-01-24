@@ -219,6 +219,13 @@ class BasicBlock(base.Base):
 		self.connect_to(block2)
 		return block2
 
+	def to_data_block(self):
+		for parent in tuple(self.parents.values()):
+			parent.disconnect_from(self)
+		for child in tuple(self.children.values()):
+			self.disconnect_from(child)
+		return DataBlock(self.bytes, self.arch, self.address)
+
 	def to_digraph(self):
 		t_instructions = tuple(self.instructions.values())
 		graph = networkx.DiGraph()

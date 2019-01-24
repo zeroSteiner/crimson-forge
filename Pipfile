@@ -15,6 +15,7 @@ termcolor = "*"
 boltons = "*"
 smoke-zephyr = "*"
 lief = "*"
+angr = "*"
 
 [dev-packages]
 ipython = "*"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  crimson_forge/__init__.py
+#  crimson_forge/analysis.py
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are
@@ -30,9 +30,30 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-__version__ = '0.1.0'
+import logging
 
-from .block import BasicBlock
-from .instruction import Instruction
-from .segment import ExecutableSegment
-from .utilities import print_error, print_good, print_status, print_warning
+import crimson_forge.block as block
+
+logger = logging.getLogger('crimson-forge.analysis')
+
+def symexec_data_identification(exec_seg):
+	# This analysis uses angr to create a control flow graph and then checks for path terminator nodes to identify
+	# static data embedded within an executable segment. This should only be necessary within the context of shellcode.
+	project = exec_seg.to_angr()
+	logger.info('Recovering the control flow graph')
+	cfg = project.analyses.CFGEmulated()  # this can take a few seconds
+	for node in cfg.deadends:
+		if node.name != 'PathTerminator':
+			continue
+		blk = exec_seg.blocks.for_address(node.addr)
+		if blk is None:
+			logger.warning('The control flow graph identified a path terminator for a non-existent block')
+		elif blk.address == node.addr:
+			if isinstance(blk, block.BasicBlock):
+				logger.info("Converting basic-block at 0x%04x to a data-block", blk.address)
+				exec_seg.blocks[node.addr] = blk.to_data_block()
+			elif isinstance(blk, block.DataBlock):
+				logger.info("Block 0x%04x was already identified as a data-block", blk.address)
+		elif isinstance(blk, block.BasicBlock):
+			dblock = blk.split(node.addr).to_data_block()
+			exec_seg.blocks[node.addr] = dblock

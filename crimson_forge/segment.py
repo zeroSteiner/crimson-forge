@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  crimson_forge/binary.py
+#  crimson_forge/executablesegment.py
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are
@@ -32,6 +32,7 @@
 
 import collections
 import collections.abc
+import io
 import logging
 
 import crimson_forge.base as base
@@ -39,6 +40,7 @@ import crimson_forge.block as block
 import crimson_forge.ir as ir
 import crimson_forge.utilities as utilities
 
+import angr
 import capstone
 import graphviz
 
@@ -97,10 +99,9 @@ class _Blocks(collections.OrderedDict):
 					graph.node(str(child_address), "0x:{:04x}".format(child_address), shape='plain')
 		return graph
 
-# todo: rename this to ExecutableSegment for accuracy
-class Binary(base.Base):
+class ExecutableSegment(base.Base):
 	def __init__(self, blob, arch, base=0x1000):
-		super(Binary, self).__init__(blob, arch, base)
+		super(ExecutableSegment, self).__init__(blob, arch, base)
 		self._md = capstone.Cs(self.arch.cs_arch, self.arch.cs_mode)
 		self._md.detail = True
 		# the mnemonic filter in some of the instruction post-processors requires intel syntax and not at&t so
@@ -242,3 +243,13 @@ class Binary(base.Base):
 				continue
 			count *= blk.permutation_count()
 		return count
+
+	def to_angr(self):
+		project = angr.Project(io.BytesIO(self.bytes), main_opts={
+			'arch': self.arch,
+			'backend': 'blob',
+			'base_addr': self.base,
+			'entry_point': self.base,
+			'filename': 'crimson-forge.bin'
+		})
+		return project

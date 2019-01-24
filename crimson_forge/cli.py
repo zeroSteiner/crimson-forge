@@ -41,6 +41,7 @@ import os
 import random
 
 import crimson_forge
+import crimson_forge.analysis
 import crimson_forge.utilities
 
 import archinfo
@@ -148,7 +149,7 @@ def main():
 	smoke_zephyr.utilities.configure_stream_logger(
 		logger=args.log_name,
 		level=args.log_level,
-		formatter=crimson_forge.utilities.ColoredLogFormatter('%(levelname)s %(message)s')
+		formatter=crimson_forge.utilities.ColoredLogFormatter('%(levelname)s [%(name)s] %(message)s')
 	)
 	gc.set_debug(args.gc_debug_stats | args.gc_debug_leak)
 
@@ -165,9 +166,9 @@ def main():
 		data = args.input.read()
 		input_data_length = len(data)
 		crimson_forge.print_status('input hash (sha-256): ' + hash(data))
-		binary = crimson_forge.Binary(data, arch)
+		binary = crimson_forge.ExecutableSegment(data, arch)
 	elif args.input_format is DataFormat.SOURCE:
-		binary = crimson_forge.Binary.from_source(args.input.read().decode('utf-8'), arch)
+		binary = crimson_forge.ExecutableSegment.from_source(args.input.read().decode('utf-8'), arch)
 	else:
 		crimson_forge.print_error('unsupported input format: ' + args.input_format)
 		return
