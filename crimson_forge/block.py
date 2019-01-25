@@ -94,14 +94,18 @@ class DataBlock(base.Base):
 	pass
 
 class BasicBlock(base.Base):
-	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv):
+	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv, ir_jumpkind):
 		super(BasicBlock, self).__init__(blob, arch, address)
 		self.cs_instructions.update(cs_instructions)
 		self.vex_instructions.update(vex_instructions)
 		self.parents = {}
 		self.children = {}
 		self.ir_tyenv = ir_tyenv
+		self.ir_jumpkind = ir_jumpkind
 		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.vex_instructions, ir_tyenv)
+
+	def __repr__(self):
+		return "<{} arch: {}, at: 0x{:04x}, jump: {}>".format(self.__class__.__name__, self.arch.name, self.address, self.ir_jumpkind)
 
 	def _exit_for_leaf(self, leaf_node, exit_node):
 		t_instructions = tuple(self.instructions.values())
@@ -117,14 +121,14 @@ class BasicBlock(base.Base):
 				return ins
 		return exit_node
 
-	def _split_new(self, addresses):
+	def _split_new(self, addresses, ir_jumpkind):
 		cls = self.__class__
 		blob_start = addresses[0] - self.address
 		blob_end = (addresses[-1] - self.address) + self.cs_instructions[addresses[-1]].size
 		blob = self.bytes[blob_start:blob_end]
 		cs_ins = collections.OrderedDict((a, self.cs_instructions[a]) for a in addresses)
 		vex_ins = collections.OrderedDict((a, self.vex_instructions[a]) for a in addresses)
-		return cls(blob, self.arch, addresses[0], cs_ins, vex_ins, self.ir_tyenv)
+		return cls(blob, self.arch, addresses[0], cs_ins, vex_ins, self.ir_tyenv, ir_jumpkind)
 
 	def connect_to(self, child):
 		if len(self.children) == 2 and child.address not in self.children:
@@ -148,7 +152,7 @@ class BasicBlock(base.Base):
 	@classmethod
 	def from_irsb(cls, blob, cs_instructions, irsb):
 		vex_instructions = ir.irsb_to_instructions(irsb)
-		return cls(blob, irsb.arch, irsb.addr, cs_instructions, vex_instructions, ir_tyenv=irsb.tyenv)
+		return cls(blob, irsb.arch, irsb.addr, cs_instructions, vex_instructions, ir_tyenv=irsb.tyenv, ir_jumpkind=irsb.jumpkind)
 
 	def is_direct_child_of(self, address):
 		if not address in self.children:
@@ -199,11 +203,12 @@ class BasicBlock(base.Base):
 		if not index:
 			raise ValueError('can not split on the first address')
 		# build the new parent (block1) and child (block2) blocks
-		block1 = self._split_new(addresses[:index])
-		block2 = self._split_new(addresses[index:])
+		block1 = self._split_new(addresses[:index], ir.JumpKind.Boring)
+		block2 = self._split_new(addresses[index:], self.ir_jumpkind)
 
 		# update this block to with the new parent information
 		self.bytes = block1.bytes
+		self.ir_jumpkind = block1.ir_jumpkind
 		self.cs_instructions.clear()
 		self.cs_instructions.update(block1.cs_instructions)
 		self.vex_instructions.clear()

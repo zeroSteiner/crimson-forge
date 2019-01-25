@@ -32,7 +32,7 @@
 
 __version__ = '0.1.0'
 
-from .block import BasicBlock
+from .block import BasicBlock, DataBlock
 from .instruction import Instruction
 from .segment import ExecutableSegment
 from .utilities import print_error, print_good, print_status, print_warning

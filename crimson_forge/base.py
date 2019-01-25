@@ -65,6 +65,12 @@ class InstructionsProxy(collections.abc.Mapping):
 	def _resolve_ir(self, address):
 		raise NotImplementedError()
 
+	def for_address(self, address):
+		for ins in self.cs_instructions.values():
+			if ins.address <= address <= (ins.address + ins.size - 1):
+				return self.__getitem__(ins.address)
+		return None
+
 	def pp_asm(self, stream='stdout'):
 		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.values()]
 		formatted = tabulate.tabulate(table, disable_numparse=True, tablefmt='plain')

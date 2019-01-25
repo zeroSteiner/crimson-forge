@@ -33,10 +33,11 @@
 import logging
 
 import crimson_forge.block as block
+import crimson_forge.ir as ir
 
 logger = logging.getLogger('crimson-forge.analysis')
 
-def symexec_data_identification(exec_seg):
+def symexec_data_identification_cfg(exec_seg):
 	# This analysis uses angr to create a control flow graph and then checks for path terminator nodes to identify
 	# static data embedded within an executable segment. This should only be necessary within the context of shellcode.
 	project = exec_seg.to_angr()
@@ -57,3 +58,33 @@ def symexec_data_identification(exec_seg):
 		elif isinstance(blk, block.BasicBlock):
 			dblock = blk.split(node.addr).to_data_block()
 			exec_seg.blocks[node.addr] = dblock
+
+def symexec_data_identification_ret(exec_seg):
+	# This analysis identifies basic-blocks with a single parent ending in a call jump and tries to confirm that they
+	# do in fact return.
+	project = exec_seg.to_angr()
+	for blk in exec_seg.blocks.values():
+		if not isinstance(blk, block.BasicBlock):
+			continue
+		if len(blk.parents) != 1:
+			continue
+		parent_bblock = tuple(blk.parents.values())[0]
+		if parent_bblock.ir_jumpkind != ir.JumpKind.Call:
+			continue
+		if blk.address != parent_bblock.address + parent_bblock.size:
+			continue
+		if len(parent_bblock.children) == 1:
+			# this would be the case if the call is not a constant, e.g. "call eax"
+			continue
+		children = parent_bblock.children.copy()
+		children.pop(blk.address)
+		callee_bblock = tuple(children.values())[0]
+
+		state = project.factory.call_state(callee_bblock.address, ret_addr=blk.address)
+		simgr = project.factory.simulation_manager(state)
+		logger.debug("Verifying execution path reaches basic-block at 0x%04x", blk.address)
+		simgr.explore(find=blk.address, num_find=1)
+
+		if not simgr.found:
+			logger.info("Converting basic-block at 0x%04x to a data-block", blk.address)
+			exec_seg.blocks[blk.address] = blk.to_data_block()

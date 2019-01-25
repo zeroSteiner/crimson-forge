@@ -45,8 +45,9 @@ import crimson_forge.analysis
 import crimson_forge.utilities
 
 import archinfo
-import boltons.timeutils
+import boltons.iterutils
 import boltons.strutils
+import boltons.timeutils
 import lief
 import smoke_zephyr.utilities
 
@@ -81,14 +82,14 @@ class AnalysisProfile(enum.Enum):
 
 def argtype_data_format(value):
 	try:
-		format_type = DataFormat(value)
+		format_type = DataFormat(value.lower())
 	except ValueError:
 		raise argparse.ArgumentTypeError("{0!r} is not a valid data format".format(value)) from None
 	return format_type
 
 def argtype_analysis_profile(value):
 	try:
-		profile = AnalysisProfile(value)
+		profile = AnalysisProfile(value.lower())
 	except ValueError:
 		raise argparse.ArgumentTypeError("{0!r} is not a valid analysis profile".format(value)) from None
 	return profile
@@ -122,7 +123,7 @@ def _handle_output_pe(args, arch, data):
 	pe_binary.add_section(section_text)
 	pe_binary.optional_header.addressof_entrypoint = section_text.virtual_address
 
-	# todo: these import should be user-configurable but default to sane profiles of legitimate functionality (i.e. file operations)
+	# todo: these imports should be user-configurable but default to sane profiles of legitimate functionality (i.e. file operations)
 	kernel32 = pe_binary.add_library('kernel32.dll')
 	kernel32.add_entry('CloseHandle')
 	kernel32.add_entry('ExitProcess')
@@ -135,6 +136,18 @@ def _handle_output_pe(args, arch, data):
 	pe_data = bytes(builder.get_build())
 	crimson_forge.print_status('pe output hash (sha-256): ' + hash(pe_data))
 	args.output.write(pe_data)
+
+def verify_block_sizes(exec_seg):
+	crimson_forge.print_status('Analyzing block sizes')
+	for block, next_block in boltons.iterutils.pairwise(exec_seg.blocks.values()):
+		prefix = "{} 0x{:04x} (size: {:,} bytes) ".format(block.__class__.__name__, block.address, block.size)
+		if next_block.address < block.address + block.size:
+			message = "over runs with next block 0x{:04x} ".format(next_block.address)
+		elif next_block.address > block.address + block.size:
+			message = "under runs with next block 0x{:04x} ".format(next_block.address)
+		else:
+			continue
+		crimson_forge.print_error(prefix + message + "(delta: {:+,} bytes)".format(block.address + block.size - next_block.address))
 
 def main():
 	start_time = datetime.datetime.utcnow()
@@ -160,6 +173,7 @@ def main():
 	parser.add_argument('--output-format', dest='output_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
+	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
 	parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
 	parser.add_argument('output', nargs='?', type=argparse.FileType('wb'), help='the optional output file')
 
@@ -196,9 +210,12 @@ def main():
 
 	crimson_forge.print_status('using analysis profile: ' + analysis_profile.value + (' (auto-detected)' if args.analysis_profile is None else ''))
 	if analysis_profile == AnalysisProfile.SHELLCODE:
-		crimson_forge.analysis.symexec_data_identification(exec_seg)
+		crimson_forge.analysis.symexec_data_identification_ret(exec_seg)
 
-	crimson_forge.print_status("total blocks: {0:,}".format(len(exec_seg.blocks)))
+	crimson_forge.print_status("total blocks: {:,}".format(len(exec_seg.blocks)))
+	crimson_forge.print_status("    basic     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.BasicBlock))))
+	crimson_forge.print_status("    data:     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.DataBlock))))
+
 	instruction_count = len(exec_seg.instructions)
 	crimson_forge.print_status("total instructions: {0:,}".format(instruction_count))
 	if args.analyze:
@@ -207,12 +224,16 @@ def main():
 		score = math.log(permutation_count, math.factorial(instruction_count))
 		crimson_forge.print_status("randomization potential score: {0:0.5f}".format(score))
 
-	data = exec_seg.permutation_bytes()
-	if input_data_length is not None and input_data_length != len(data):
-		crimson_forge.print_error("raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
-	else:
-		crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)) + ' (correct)')
 	if args.output:
+		if args.permutation:
+			data = exec_seg.permutation_bytes()
+		else:
+			data = exec_seg.bytes
+		if input_data_length is not None and input_data_length != len(data):
+			crimson_forge.print_error("raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
+			verify_block_sizes(exec_seg)
+		else:
+			crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)) + ' (correct)')
 		crimson_forge.print_status('raw output hash (sha-256): ' + hash(data))
 		_handle_output(args, arch, data)
 	else:

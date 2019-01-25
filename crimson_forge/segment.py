@@ -140,6 +140,27 @@ class ExecutableSegment(base.Base):
 			if blob:
 				self._process_irsb(self.__vex_lift(blob, jump.to_address), parent=self.blocks.for_address(jump.from_address))
 
+	def __process_irsb_jk_no_decode(self, irsb):
+		offset = irsb.addr - self.base
+		size = 0
+		while self.blocks.for_address(self.base + offset + size) is None and offset + size < self.size:
+			size += 1
+		blob = self.bytes[offset:offset + size]
+		blk = self.blocks.for_address(irsb.addr)
+		if blk is None:
+			logger.info("Creating data-block from IRSB ending with %s at 0x%04x", irsb.jumpkind, irsb.addr)
+			blk = block.DataBlock(blob, self.arch, irsb.addr)
+			self.blocks[blk.address] = blk
+		else:
+			if isinstance(blk, block.BasicBlock):
+				ins = blk.instructions.for_address(irsb.addr)
+				if blk.address != ins.address:
+					blk = blk.split(ins.address)
+				blk = blk.to_data_block()
+				self.blocks[blk.address] = blk
+			blk.bytes += blob
+		return blk
+
 	def __vex_lift(self, blob, base=None):
 		base = self.base if base is None else base
 		return ir.lift(blob, base, self.arch)
@@ -149,28 +170,12 @@ class ExecutableSegment(base.Base):
 		yield from self._md.disasm(blob, base)
 
 	def _process_irsb(self, irsb, parent=None):
+		if irsb.size == 0 and irsb.jumpkind == ir.JumpKind.NoDecode:
+			return self.__process_irsb_jk_no_decode(irsb)
+
 		offset = irsb.addr - self.base
 		blob = self.bytes[offset:offset + irsb.size]
 		cs_instructions = collections.OrderedDict()
-		if irsb.size == 0 and irsb.jumpkind == ir.JumpKind.NoDecode:
-			size = 0
-			while self.blocks.for_address(self.base + offset + size) is None and offset + size < self.size:
-				size += 1
-			blob = self.bytes[offset:offset + size]
-			bblock = self.blocks.for_address(irsb.addr - 1)
-			if bblock is None:
-				logger.info("Creating data-block from IRSB ending with %s at 0x%04x", irsb.jumpkind, irsb.addr)
-				bblock = block.DataBlock(blob, self.arch, irsb.addr)
-				self.blocks[bblock.address] = bblock
-			else:
-				if isinstance(bblock, block.BasicBlock):
-					if bblock.address != irsb.addr - 1:
-						bblock = bblock.split(irsb.addr - 1)
-					bblock = bblock.to_data_block()
-					self.blocks[bblock.address] = bblock
-				bblock.bytes += blob
-			return
-
 		for addr in irsb.instruction_addresses:
 			if addr not in self.cs_instructions:
 				cs_ins = next(self._disassemble(self.bytes[addr - self.base:], addr), None)
@@ -205,7 +210,7 @@ class ExecutableSegment(base.Base):
 					self.blocks[sub_bblock.address] = sub_bblock
 				self.__process_irsb_jump(jump)
 			if ir.JumpKind.returns(irsb.jumpkind):
-				jump = ir.IRJump(self.arch, bblock.address + bblock.size, tuple(bblock.cs_instructions.keys())[-1], kind=ir.JumpKind.Ret)
+				jump = ir.IRJump(self.arch, bblock.address + bblock.size, tuple(bblock.cs_instructions.keys())[-1])
 				self.__process_irsb_jump(jump)
 		return bblock
 
