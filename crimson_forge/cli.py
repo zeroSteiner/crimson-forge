@@ -42,6 +42,7 @@ import random
 
 import crimson_forge
 import crimson_forge.analysis
+import crimson_forge.binfile
 import crimson_forge.utilities
 
 import archinfo
@@ -59,7 +60,7 @@ analysis profile choices:
                    file such as a windows portable executable (.exe)
 
 data format choices:
-  pe               a portable executable
+  pe:exe           a portable executable
   raw              raw executable code
   source           assembly source code
 """
@@ -71,7 +72,7 @@ architectures = {
 
 @enum.unique
 class DataFormat(enum.Enum):
-	PE = 'pe'
+	PE_EXE = 'pe:exe'
 	RAW = 'raw'
 	SOURCE = 'source'
 
@@ -100,54 +101,15 @@ def hash(data, algorithm='sha256'):
 def _handle_output(args, arch, data):
 	if args.output_format == DataFormat.RAW:
 		args.output.write(data)
-	elif args.output_format == DataFormat.PE:
-		_handle_output_pe(args, arch, data)
+	elif args.output_format == DataFormat.PE_EXE:
+		if not isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
+			crimson_forge.print_error('unsupported architecture for pe output: ' + arch.name)
+			return
+		pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
+		crimson_forge.print_status('pe output hash (sha-256): ' + hash(pe_data))
+		args.output.write(pe_data)
 	else:
 		crimson_forge.print_error('unsupported output format: ' + args.input_format)
-
-def _handle_output_pe(args, arch, data):
-	if isinstance(arch, archinfo.ArchX86):
-		pe_binary = lief.PE.Binary('pe_from_scratch', lief.PE.PE_TYPE.PE32)
-		pe_binary.optional_header.imagebase = 0x400000
-	elif isinstance(arch, archinfo.ArchAMD64):
-		pe_binary = lief.PE.Binary('pe_from_scratch', lief.PE.PE_TYPE.PE32_PLUS)
-		pe_binary.optional_header.imagebase = 0x140000000
-	else:
-		crimson_forge.print_error('unsupported architecture for PE output: ' + arch.name)
-		return
-
-	section_text = lief.PE.Section('.text')
-	section_text.characteristics = 0x60000020
-	section_text.content = data
-	section_text.virtual_address = 0x1000
-	pe_binary.add_section(section_text)
-	pe_binary.optional_header.addressof_entrypoint = section_text.virtual_address
-
-	# todo: these imports should be user-configurable but default to sane profiles of legitimate functionality (i.e. file operations)
-	kernel32 = pe_binary.add_library('kernel32.dll')
-	kernel32.add_entry('CloseHandle')
-	kernel32.add_entry('ExitProcess')
-	user32 = pe_binary.add_library('user32.dll')
-	user32.add_entry('MessageBoxA')
-
-	builder = lief.PE.Builder(pe_binary)
-	builder.build_imports(True)
-	builder.build()
-	pe_data = bytes(builder.get_build())
-	crimson_forge.print_status('pe output hash (sha-256): ' + hash(pe_data))
-	args.output.write(pe_data)
-
-def verify_block_sizes(exec_seg):
-	crimson_forge.print_status('Analyzing block sizes')
-	for block, next_block in boltons.iterutils.pairwise(exec_seg.blocks.values()):
-		prefix = "{} 0x{:04x} (size: {:,} bytes) ".format(block.__class__.__name__, block.address, block.size)
-		if next_block.address < block.address + block.size:
-			message = "over runs with next block 0x{:04x} ".format(next_block.address)
-		elif next_block.address > block.address + block.size:
-			message = "under runs with next block 0x{:04x} ".format(next_block.address)
-		else:
-			continue
-		crimson_forge.print_error(prefix + message + "(delta: {:+,} bytes)".format(block.address + block.size - next_block.address))
 
 def main():
 	start_time = datetime.datetime.utcnow()
@@ -162,6 +124,7 @@ def main():
 	gc_group = parser.add_argument_group('garbage collector options')
 	gc_group.add_argument('--gc-debug-leak', action='store_const', const=gc.DEBUG_LEAK, default=0, help='set the DEBUG_LEAK flag')
 	gc_group.add_argument('--gc-debug-stats', action='store_const', const=gc.DEBUG_STATS, default=0, help='set the DEBUG_STATS flag')
+
 	log_group = parser.add_argument_group('logging options')
 	log_group.add_argument('--log-level', default=logging.WARNING, choices=('DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'), help='set the log level')
 	log_group.add_argument('--log-name', default='crimson-forge', help='specify the root logger')
@@ -231,7 +194,8 @@ def main():
 			data = exec_seg.bytes
 		if input_data_length is not None and input_data_length != len(data):
 			crimson_forge.print_error("raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
-			verify_block_sizes(exec_seg)
+			crimson_forge.print_status('Analyzing block sizes...')
+			crimson_forge.analysis.check_block_sizes(exec_seg)
 		else:
 			crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)) + ' (correct)')
 		crimson_forge.print_status('raw output hash (sha-256): ' + hash(data))

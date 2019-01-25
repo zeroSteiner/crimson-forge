@@ -35,7 +35,21 @@ import logging
 import crimson_forge.block as block
 import crimson_forge.ir as ir
 
+import boltons.iterutils
+
 logger = logging.getLogger('crimson-forge.analysis')
+
+def check_block_sizes(exec_seg):
+	# use this function when there is a size mismatch to help identify where it is, the faulty blocks are logged
+	for block, next_block in boltons.iterutils.pairwise(exec_seg.blocks.values()):
+		prefix = "{} 0x{:04x} (size: {:,} bytes) ".format(block.__class__.__name__, block.address, block.size)
+		if next_block.address < block.address + block.size:
+			message = "over runs with next block 0x{:04x} ".format(next_block.address)
+		elif next_block.address > block.address + block.size:
+			message = "under runs with next block 0x{:04x} ".format(next_block.address)
+		else:
+			continue
+		logger.error(prefix + message + "(delta: {:+,} bytes)".format(block.address + block.size - next_block.address))
 
 def symexec_data_identification_cfg(exec_seg):
 	# This analysis uses angr to create a control flow graph and then checks for path terminator nodes to identify
