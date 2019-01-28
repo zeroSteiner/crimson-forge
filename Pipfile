@@ -24,3 +24,4 @@ jupyter = "*"
 
 [scripts]
 crimson-forge = "python -m crimson_forge"
+metasploit = "python -m crimson_forge.metasploit"

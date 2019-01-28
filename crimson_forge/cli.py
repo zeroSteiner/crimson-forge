@@ -49,7 +49,6 @@ import archinfo
 import boltons.iterutils
 import boltons.strutils
 import boltons.timeutils
-import lief
 import smoke_zephyr.utilities
 
 HELP_EPILOG = """\
@@ -98,20 +97,20 @@ def argtype_analysis_profile(value):
 def hash(data, algorithm='sha256'):
 	return hashlib.new(algorithm, data).hexdigest()
 
-def _handle_output(args, arch, data):
+def _handle_output(args, printer, arch, data):
 	if args.output_format == DataFormat.RAW:
 		args.output.write(data)
 	elif args.output_format == DataFormat.PE_EXE:
 		if not isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
-			crimson_forge.print_error('unsupported architecture for pe output: ' + arch.name)
+			printer.print_error('Unsupported architecture for PE output: ' + arch.name)
 			return
 		pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
-		crimson_forge.print_status('pe output hash (sha-256): ' + hash(pe_data))
+		printer.print_status('PE output hash (SHA-256): ' + hash(pe_data))
 		args.output.write(pe_data)
 	else:
-		crimson_forge.print_error('unsupported output format: ' + args.input_format)
+		printer.print_error('Unsupported output format: ' + args.input_format)
 
-def main():
+def main(args=None, input_data=None, printer=None):
 	start_time = datetime.datetime.utcnow()
 	parser = argparse.ArgumentParser(
 		'crimson-forge',
@@ -137,71 +136,73 @@ def main():
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
-	parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
+	if input_data is None:
+		parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
 	parser.add_argument('output', nargs='?', type=argparse.FileType('wb'), help='the optional output file')
 
-	args = parser.parse_args()
+	args = parser.parse_args(args)
 	smoke_zephyr.utilities.configure_stream_logger(
 		logger=args.log_name,
 		level=args.log_level,
 		formatter=crimson_forge.utilities.ColoredLogFormatter('%(levelname)s [%(name)s] %(message)s')
 	)
 	gc.set_debug(args.gc_debug_stats | args.gc_debug_leak)
+	printer = printer or crimson_forge.utilities
 
-	crimson_forge.print_status("crimson-forge engine: v{0}".format(crimson_forge.__version__))
-
+	printer.print_status("Crimson-Forge Engine: v{0}".format(crimson_forge.__version__))
 	if args.prng_seed:
 		random.seed(args.prng_seed)
-		crimson_forge.print_status("seeding the random number generator with {0} (0x{0:x})".format(args.prng_seed))
+		printer.print_status("Seeding the random number generator with {0} (0x{0:x})".format(args.prng_seed))
 
 	analysis_profile = args.analysis_profile
 	arch = architectures[args.arch]
-	crimson_forge.print_status('architecture set as: ' + arch.name)
+	printer.print_status('Architecture set as: ' + arch.name)
 	input_data_length = None
 	if args.input_format is DataFormat.RAW:
-		data = args.input.read()
-		input_data_length = len(data)
-		crimson_forge.print_status('input hash (sha-256): ' + hash(data))
-		exec_seg = crimson_forge.ExecutableSegment(data, arch)
+		input_data = input_data or args.input.read()
+		input_data_length = len(input_data)
+		printer.print_status('Input hash (SHA-256): ' + hash(input_data))
+		exec_seg = crimson_forge.ExecutableSegment(input_data, arch)
 		analysis_profile = analysis_profile or AnalysisProfile.SHELLCODE
 	elif args.input_format is DataFormat.SOURCE:
-		exec_seg = crimson_forge.ExecutableSegment.from_source(args.input.read().decode('utf-8'), arch)
+		input_data = input_data or args.input.read().decode('utf-8')
+		exec_seg = crimson_forge.ExecutableSegment.from_source(input_data, arch)
 		analysis_profile = analysis_profile or AnalysisProfile.SHELLCODE
 	else:
-		crimson_forge.print_error('unsupported input format: ' + args.input_format)
+		printer.print_error('Unsupported input format: ' + args.input_format)
 		return
 
-	crimson_forge.print_status('using analysis profile: ' + analysis_profile.value + (' (auto-detected)' if args.analysis_profile is None else ''))
+	printer.print_status('Using analysis profile: ' + analysis_profile.value + (' (auto-detected)' if args.analysis_profile is None else ''))
 	if analysis_profile == AnalysisProfile.SHELLCODE:
 		crimson_forge.analysis.symexec_data_identification_ret(exec_seg)
 
-	crimson_forge.print_status("total blocks: {:,}".format(len(exec_seg.blocks)))
-	crimson_forge.print_status("    basic     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.BasicBlock))))
-	crimson_forge.print_status("    data:     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.DataBlock))))
+	printer.print_status("Total blocks: {:,}".format(len(exec_seg.blocks)))
+	printer.print_status("    basic     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.BasicBlock))))
+	printer.print_status("    data:     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.DataBlock))))
 
 	instruction_count = len(exec_seg.instructions)
-	crimson_forge.print_status("total instructions: {0:,}".format(instruction_count))
+	printer.print_status("Total instructions: {0:,}".format(instruction_count))
 	if args.analyze:
 		permutation_count = exec_seg.permutation_count()
-		crimson_forge.print_status("possible permutations: {0:,}".format(permutation_count))
+		printer.print_status("Possible permutations: {0:,}".format(permutation_count))
 		score = math.log(permutation_count, math.factorial(instruction_count))
-		crimson_forge.print_status("randomization potential score: {0:0.5f}".format(score))
+		printer.print_status("Randomization potential score: {0:0.5f}".format(score))
 
 	if args.output:
 		if args.permutation:
-			data = exec_seg.permutation_bytes()
+			input_data = exec_seg.permutation_bytes()
 		else:
-			data = exec_seg.bytes
-		if input_data_length is not None and input_data_length != len(data):
-			crimson_forge.print_error("raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(data)), boltons.strutils.bytes2human(input_data_length)))
-			crimson_forge.print_status('Analyzing block sizes...')
+			input_data = exec_seg.bytes
+		if input_data_length is not None and input_data_length != len(input_data):
+			printer.print_error("Raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(input_data)), boltons.strutils.bytes2human(input_data_length)))
+			printer.print_status('Analyzing block sizes...')
 			crimson_forge.analysis.check_block_sizes(exec_seg)
 		else:
-			crimson_forge.print_status('output length: ' + boltons.strutils.bytes2human(len(data)) + ' (correct)')
-		crimson_forge.print_status('raw output hash (sha-256): ' + hash(data))
-		_handle_output(args, arch, data)
+			printer.print_status('Output length: ' + boltons.strutils.bytes2human(len(input_data)) + ' (correct)')
+		printer.print_status('Raw output hash (SHA-256): ' + hash(input_data))
+		_handle_output(args, printer, arch, input_data)
 	else:
-		crimson_forge.print_status('no output file specified')
+		printer.print_status('To output file specified')
 
 	elapsed = boltons.timeutils.decimal_relative_time(start_time, datetime.datetime.utcnow())
-	crimson_forge.print_status("completed in {0:.3f} {1}".format(*elapsed))
+	printer.print_status("Completed in {0:.3f} {1}".format(*elapsed))
