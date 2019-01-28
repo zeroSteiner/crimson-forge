@@ -91,7 +91,8 @@ class _InstructionsProxy(base.InstructionsProxy):
 		return self._vex_instructions[address], self._ir_tyenv
 
 class DataBlock(base.Base):
-	pass
+	def __repr__(self):
+		return "<{} arch: {}, at: 0x{:04x}, size: {}, data: {!r} >".format(self.__class__.__name__, self.arch.name, self.address, self.size, self.bytes)
 
 class BasicBlock(base.Base):
 	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv, ir_jumpkind):
@@ -105,7 +106,7 @@ class BasicBlock(base.Base):
 		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.vex_instructions, ir_tyenv)
 
 	def __repr__(self):
-		return "<{} arch: {}, at: 0x{:04x}, jump: {}>".format(self.__class__.__name__, self.arch.name, self.address, self.ir_jumpkind)
+		return "<{} arch: {}, at: 0x{:04x}, size: {}, jump: {} >".format(self.__class__.__name__, self.arch.name, self.address, self.size, self.ir_jumpkind)
 
 	def _exit_for_leaf(self, leaf_node, exit_node):
 		t_instructions = tuple(self.instructions.values())

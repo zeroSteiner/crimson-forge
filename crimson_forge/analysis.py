@@ -77,7 +77,9 @@ def symexec_data_identification_ret(exec_seg):
 	# This analysis identifies basic-blocks with a single parent ending in a call jump and tries to confirm that they
 	# do in fact return.
 	project = exec_seg.to_angr()
-	for blk in exec_seg.blocks.values():
+	for blk in tuple(exec_seg.blocks.values()):
+		if blk.address not in exec_seg.blocks:
+			continue  # a previous iteration of this loop caused this block to be absorbed
 		if not isinstance(blk, block.BasicBlock):
 			continue
 		if len(blk.parents) != 1:
@@ -99,6 +101,12 @@ def symexec_data_identification_ret(exec_seg):
 		logger.debug("Verifying execution path reaches basic-block at 0x%04x", blk.address)
 		simgr.explore(find=blk.address, num_find=1)
 
-		if not simgr.found:
-			logger.info("Converting basic-block at 0x%04x to a data-block", blk.address)
-			exec_seg.blocks[blk.address] = blk.to_data_block()
+		if simgr.found:
+			continue
+		logger.info("Converting basic-block at 0x%04x to a data-block", blk.address)
+		blk = blk.to_data_block()
+		exec_seg.blocks[blk.address] = blk
+		next_blk = exec_seg.blocks.get(blk.address + blk.size)
+		if isinstance(next_blk, block.DataBlock):
+			blk.bytes += next_blk.bytes
+			del exec_seg.blocks[next_blk.address]

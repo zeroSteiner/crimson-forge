@@ -126,14 +126,19 @@ class ExecutableSegment(base.Base):
 			raise RuntimeError('parent basic-block is None')
 		# check if the jump target belongs to an existing block
 		jmp_bblock = self.blocks.for_address(jump.to_address)
-		if jmp_bblock:
-			connect_to_self = jmp_bblock is bblock
-			if jump.to_address != jmp_bblock.address:
-				jmp_bblock = jmp_bblock.split(jump.to_address)
-				self.blocks[jmp_bblock.address] = jmp_bblock
-			if connect_to_self:
-				jmp_bblock.connect_to(jmp_bblock)
-			bblock.connect_to(jmp_bblock)
+		if isinstance(jmp_bblock, block.BasicBlock):
+			if jump.to_address in jmp_bblock.instructions:
+				connect_to_self = jmp_bblock is bblock
+				if jump.to_address != jmp_bblock.address:
+					jmp_bblock = jmp_bblock.split(jump.to_address)
+					self.blocks[jmp_bblock.address] = jmp_bblock
+				if connect_to_self:
+					jmp_bblock.connect_to(jmp_bblock)
+				bblock.connect_to(jmp_bblock)
+			else:
+				logger.warning("Block 0x%04x jumps to the middle of an instruction at 0x%04x", bblock.address, jump.to_address)
+		elif isinstance(jmp_bblock, block.DataBlock):
+			logger.warning("Block 0x%04x jumps to a data-block at 0x%04x", bblock.address, jump.to_address)
 		else:
 			# if no block is found, build a new one from the blob (if there is data left)
 			blob = self.bytes[jump.to_address - self.base:]
@@ -142,7 +147,7 @@ class ExecutableSegment(base.Base):
 
 	def __process_irsb_jk_no_decode(self, irsb):
 		offset = irsb.addr - self.base
-		size = 0
+		size = irsb.size
 		while self.blocks.for_address(self.base + offset + size) is None and offset + size < self.size:
 			size += 1
 		blob = self.bytes[offset:offset + size]
@@ -170,7 +175,7 @@ class ExecutableSegment(base.Base):
 		yield from self._md.disasm(blob, base)
 
 	def _process_irsb(self, irsb, parent=None):
-		if irsb.size == 0 and irsb.jumpkind == ir.JumpKind.NoDecode:
+		if irsb.jumpkind == ir.JumpKind.NoDecode:
 			return self.__process_irsb_jk_no_decode(irsb)
 
 		offset = irsb.addr - self.base

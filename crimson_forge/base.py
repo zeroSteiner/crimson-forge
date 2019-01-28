@@ -93,7 +93,7 @@ class Base(object):
 		self.vex_instructions = collections.OrderedDict()
 
 	def __repr__(self):
-		return "<{0} arch: {1}, at: 0x{2:04x} >".format(self.__class__.__name__, self.arch.name, self.address)
+		return "<{0} arch: {1}, at: 0x{2:04x}, size: {} >".format(self.__class__.__name__, self.arch.name, self.address, self.size)
 
 	@property
 	def bytes_hex(self):
