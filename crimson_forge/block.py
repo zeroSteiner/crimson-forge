@@ -225,6 +225,10 @@ class BasicBlock(base.Base):
 		self.connect_to(block2)
 		return block2
 
+	@property
+	def ssa_variables(self):
+		return ssa.Variables(self.instructions)
+
 	def to_data_block(self):
 		for parent in tuple(self.parents.values()):
 			parent.disconnect_from(self)

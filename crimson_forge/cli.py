@@ -177,7 +177,7 @@ def main(args=None, input_data=None, printer=None):
 		crimson_forge.analysis.symexec_data_identification_ret(exec_seg)
 
 	printer.print_status("Total blocks: {:,}".format(len(exec_seg.blocks)))
-	printer.print_status("    basic     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.BasicBlock))))
+	printer.print_status("    basic:    {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.BasicBlock))))
 	printer.print_status("    data:     {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.DataBlock))))
 
 	instruction_count = len(exec_seg.instructions)

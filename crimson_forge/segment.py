@@ -38,6 +38,7 @@ import logging
 import crimson_forge.base as base
 import crimson_forge.block as block
 import crimson_forge.ir as ir
+import crimson_forge.ssa as ssa
 import crimson_forge.utilities as utilities
 
 import angr
@@ -257,6 +258,10 @@ class ExecutableSegment(base.Base):
 				continue
 			count *= blk.permutation_count()
 		return count
+
+	@property
+	def ssa_variables(self):
+		return ssa.Variables(self.instructions)
 
 	def to_angr(self):
 		project = angr.Project(io.BytesIO(self.bytes), main_opts={

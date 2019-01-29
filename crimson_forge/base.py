@@ -100,5 +100,9 @@ class Base(object):
 		return binascii.b2a_hex(self.bytes)
 
 	@property
+	def next_address(self):
+		return self.address + self.size
+
+	@property
 	def size(self):
 		return len(self.bytes)
