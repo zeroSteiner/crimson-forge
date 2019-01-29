@@ -68,7 +68,7 @@ metadata = {
 	'authors': ['Spencer McIntyre'],
 	'license': 'MSF_LICENSE',
 	'type': 'evasion',
-	'options': {
+	'advanced_options': {
 		'LOG_LEVEL': {
 			'type': 'enum',
 			'description': 'The log level',
@@ -79,9 +79,13 @@ metadata = {
 		'LOG_NAME': {
 			'type': 'string',
 			'description': 'The name of the root logger',
-			'required': True,
+			'required': False,
 			'default': 'crimson-forge'
 		},
+	},
+	'default_options': {
+		'AutoLoadStdapi': False,
+		'AutoSystemInfo': False,
 	},
 	'targets': [dict(name=name, **value) for name, value in targets.items()],
 	'references': [
