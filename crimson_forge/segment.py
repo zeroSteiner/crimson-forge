@@ -34,6 +34,7 @@ import collections
 import collections.abc
 import io
 import logging
+import re
 
 import crimson_forge.base as base
 import crimson_forge.block as block
@@ -44,6 +45,7 @@ import crimson_forge.utilities as utilities
 import angr
 import capstone
 import graphviz
+import tabulate
 
 logger = logging.getLogger('crimson-forge.binary')
 
@@ -272,3 +274,9 @@ class ExecutableSegment(base.Base):
 			'filename': 'crimson-forge.bin'
 		})
 		return project
+
+	def to_source(self):
+		source = "; base address: 0x{:04x}\n_start:\n".format(self.address)
+		for blk in self.blocks.values():
+			source += blk.to_source()
+		return source

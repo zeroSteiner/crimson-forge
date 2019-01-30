@@ -98,15 +98,18 @@ def hash(data, algorithm='sha256'):
 	return hashlib.new(algorithm, data).hexdigest()
 
 def _handle_output(args, printer, arch, data):
-	if args.output_format == DataFormat.RAW:
-		args.output.write(data)
-	elif args.output_format == DataFormat.PE_EXE:
+	if args.output_format == DataFormat.PE_EXE:
 		if not isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
 			printer.print_error('Unsupported architecture for PE output: ' + arch.name)
 			return
 		pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
 		printer.print_status('PE output hash (SHA-256): ' + hash(pe_data))
 		args.output.write(pe_data)
+	elif args.output_format == DataFormat.RAW:
+		args.output.write(data)
+	elif args.output_format == DataFormat.SOURCE:
+		o_exec_seg = crimson_forge.segment.ExecutableSegment(data, arch)
+		args.output.write(o_exec_seg.to_source().encode('utf-8'))
 	else:
 		printer.print_error('Unsupported output format: ' + args.input_format)
 
@@ -190,17 +193,17 @@ def main(args=None, input_data=None, printer=None):
 
 	if args.output:
 		if args.permutation:
-			input_data = exec_seg.permutation_bytes()
+			output_data = exec_seg.permutation_bytes()
 		else:
-			input_data = exec_seg.bytes
-		if input_data_length is not None and input_data_length != len(input_data):
-			printer.print_error("Raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(input_data)), boltons.strutils.bytes2human(input_data_length)))
+			output_data = exec_seg.bytes
+		if input_data_length is not None and input_data_length != len(output_data):
+			printer.print_error("Raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(output_data)), boltons.strutils.bytes2human(input_data_length)))
 			printer.print_status('Analyzing block sizes...')
 			crimson_forge.analysis.check_block_sizes(exec_seg)
 		else:
-			printer.print_status('Output length: ' + boltons.strutils.bytes2human(len(input_data)) + ' (correct)')
-		printer.print_status('Raw output hash (SHA-256): ' + hash(input_data))
-		_handle_output(args, printer, arch, input_data)
+			printer.print_status('Output length: ' + boltons.strutils.bytes2human(len(output_data)) + ' (correct)')
+		printer.print_status('Raw output hash (SHA-256): ' + hash(output_data))
+		_handle_output(args, printer, arch, output_data)
 	else:
 		printer.print_status('To output file specified')
 
