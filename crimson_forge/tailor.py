@@ -81,6 +81,12 @@ class AlterationBase(object):
 	def __init__(self, arch):
 		self.arch = arch
 
+	def check_instruction(self, ins):
+		raise NotImplementedError()
+
+	def check(self, graph):
+		return any(self.check_instruction(ins) for ins in graph.nodes)
+
 	def run(self, graph):
 		raise NotImplementedError()
 

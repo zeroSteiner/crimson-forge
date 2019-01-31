@@ -218,7 +218,7 @@ class BasicBlock(BlockBase):
 
 	def permutation_source(self):
 		constraints = self.to_digraph()
-		#constraints = tailor.alter(constraints, self.arch)
+		constraints = tailor.alter(constraints, self.arch)
 
 		instructions = collections.deque()
 		# the initial choices are any node without a predecessor (dependency)
