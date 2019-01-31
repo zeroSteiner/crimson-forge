@@ -47,6 +47,9 @@ logger = logging.getLogger('crimson-forge.tailor')
 
 _SIZES = {64: 'qword', 32: 'dword', 16: 'word', 8: 'byte'}
 
+def is_numeric(string):
+	return re.match(r'^(0x[a-f0-9]+|[0-9]+)$', string, flags=re.IGNORECASE) is not None
+
 alterations = collections.defaultdict(list)
 def register_alteration():
 	def decorator(Alteration):
@@ -82,6 +85,9 @@ class AlterationBase(object):
 		raise NotImplementedError()
 
 	def inject_instructions(self, graph, orig_ins, new_instructions):
+		new_instructions = tuple(
+			instruction.Instruction.from_source(ins_src, self.arch, orig_ins.address) for ins_src in new_instructions
+		)
 		for predecessor in tuple(graph.predecessors(orig_ins)):
 			graph.remove_edge(predecessor, orig_ins)
 			graph.add_edge(predecessor, new_instructions[0])
@@ -94,14 +100,27 @@ class AlterationBase(object):
 			graph.add_edge(predecessor, successor)
 		graph.remove_node(orig_ins)
 
-	def ins_mov_ptr_val(self, register, value, address):
-		size = _SIZES.get(register.width)
+	# write to a pointer
+	def ins_mov_ptr_val(self, register, value, width=None):
+		if register.width != self.arch.bits:
+			raise ValueError('Register is not a native size for the architecture')
+		size = _SIZES.get(width or self.arch.bits)
 		if size is None:
 			raise ValueError("Unknown size of register: {!r}".format(register))
 		if isinstance(value, int):
 			value = "0x{:x}".format(value)
-		source = "mov {} ptr [{}], {}".format(size, register.name, value)
-		return instruction.Instruction.from_source(source, self.arch, address)
+		return "mov {} ptr [{}], {}".format(size, register.name, value)
+
+	# read from a pointer
+	def ins_mov_val_ptr(self, register, value, width=None):
+		if register.width != self.arch.bits:
+			raise ValueError('Register is not a native size for the architecture')
+		size = _SIZES.get(width or self.arch.bits)
+		if size is None:
+			raise ValueError("Unknown size of register: {!r}".format(register))
+		if isinstance(value, int):
+			value = "0x{:x}".format(value)
+		return "mov {}, {} ptr [{}]".format(value, size, register.name)
 
 ################################################################################
 # Architecture Specific Alterations
@@ -109,7 +128,7 @@ class AlterationBase(object):
 amd64 = archinfo.ArchAMD64()
 x86 = archinfo.ArchX86()
 
-#@register_alteration()
+@register_alteration()
 class PushValue(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'push_value'
@@ -119,9 +138,29 @@ class PushValue(AlterationBase):
 			match = re.match(r'^push (?P<value>\S+)', ins.source)
 			if match is None:
 				continue
+			if not is_numeric(match.group('value')):
+				if stk_ptr & ir.IRRegister.from_arch(self.arch, match.group('value')):
+					continue
 			self.inject_instructions(graph, ins, (
-				instruction.Instruction.from_source("sub {}, {}".format(stk_ptr.name, stk_ptr.width // 8), self.arch, ins.address),
-				self.ins_mov_ptr_val(stk_ptr, match.group('value'), ins.address)
+				"sub {}, {}".format(stk_ptr.name, stk_ptr.width // 8),
+				self.ins_mov_ptr_val(stk_ptr, match.group('value'))
+			))
+
+@register_alteration()
+class PopValue(AlterationBase):
+	architectures = (amd64, x86)
+	name = 'pop_value'
+	def run(self, graph):
+		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
+		for ins in tuple(graph.nodes):
+			match = re.match(r'^pop (?P<value>\S+)', ins.source)
+			if match is None:
+				continue
+			if stk_ptr & ir.IRRegister.from_arch(self.arch, match.group('value')):
+				continue
+			self.inject_instructions(graph, ins, (
+				self.ins_mov_val_ptr(stk_ptr, match.group('value')),
+				"add {}, {}".format(stk_ptr.name, stk_ptr.width // 8)
 			))
 
 @register_alteration()
@@ -135,12 +174,12 @@ class MoveConstant(AlterationBase):
 			if match is None:
 				continue
 			reg = ir.IRRegister.from_arch(self.arch, match.group('register'))
-			if reg & stk_ptr:
+			if stk_ptr & reg:
 				continue
 			value = int(match.group('value'), 16)
-			mod = 0
-			value -= mod
+			modifier = random.randint(0, value)
+			value -= modifier
 			self.inject_instructions(graph, ins, (
-				instruction.Instruction.from_source("mov {}, 0x{:x}".format(reg.name, value), self.arch, ins.address),
-				instruction.Instruction.from_source("add {}, 0x{:x}".format(reg.name, mod), self.arch, ins.address)
+				"mov {}, 0x{:x}".format(reg.name, value),
+				"add {}, 0x{:x}".format(reg.name, modifier)
 			))

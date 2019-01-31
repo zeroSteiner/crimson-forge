@@ -243,7 +243,7 @@ class ExecutableSegment(base.Base):
 
 	def permutation_bytes(self):
 		source = self.permutation_source()
-		return bytes(self.arch.keystone.asm(source)[0])
+		return bytes(self.arch.keystone.asm(source, self.address)[0])
 
 	def permutation_count(self):
 		count = 1
