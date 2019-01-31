@@ -74,9 +74,10 @@ class Variables(collections.abc.Collection):
 		var_regs = tuple(ir.IRRegister.from_arch(arch, name) for name in VARIABLE_REGISTERS[arch.name])
 		for ins in instructions.values():
 			for reg in ins.registers.modified:
-				if not any(reg & var_reg for var_reg in var_regs):
+				var_reg = next((var_reg for var_reg in var_regs if var_reg * reg), None)
+				if var_reg is None:
 					continue
-				self._storage.append(Variable(ins.address, reg))
+				self._storage.append(Variable(ins.address, var_reg))
 
 	def __contains__(self, item):
 		return item in self._storage

@@ -242,16 +242,8 @@ class ExecutableSegment(base.Base):
 		return self.__class__(blob, self.arch, self.base)
 
 	def permutation_bytes(self):
-		blob = b''
-		for blk in self.blocks.values():
-			if isinstance(blk, block.DataBlock):
-				blob += blk.bytes
-			elif isinstance(blk, block.BasicBlock):
-				permutation = blk.permutation()
-				blob += permutation.bytes
-			else:
-				raise TypeError('block type is not supported')
-		return blob
+		source = self.permutation_source()
+		return bytes(self.arch.keystone.asm(source)[0])
 
 	def permutation_count(self):
 		count = 1
@@ -260,6 +252,17 @@ class ExecutableSegment(base.Base):
 				continue
 			count *= blk.permutation_count()
 		return count
+
+	def permutation_source(self):
+		source = ''
+		for blk in self.blocks.values():
+			if isinstance(blk, block.DataBlock):
+				source += blk.to_source()
+			elif isinstance(blk, block.BasicBlock):
+				source += blk.permutation_source()
+			else:
+				raise TypeError('block type is not supported')
+		return source
 
 	@property
 	def ssa_variables(self):

@@ -40,6 +40,8 @@ import re
 import crimson_forge.base as base
 import crimson_forge.ir as ir
 import crimson_forge.ssa as ssa
+import crimson_forge.tailor as tailor
+import crimson_forge.utilities as utilities
 
 import archinfo
 import graphviz
@@ -110,9 +112,9 @@ class SourceLineLabel(SourceLine):
 		self.comment = comment
 
 class BlockBase(base.Base):  # yo dawg I head you like base classes
-	def to_source(self):
+	def to_source(self, *args, **kwargs):
 		lines = collections.deque()
-		for src_line in self.source_iter():
+		for src_line in self.source_iter(*args, **kwargs):
 			comment = '' if src_line.comment is None else '; ' + src_line.comment
 			if isinstance(src_line, SourceLineLabel):
 				lines.append((src_line.code, comment))
@@ -188,6 +190,11 @@ class BasicBlock(BlockBase):
 		return cls.from_irsb(blob, cs_instructions, ir.lift(blob, base, arch))
 
 	@classmethod
+	def from_source(cls, source, arch, base=0x1000):
+		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
+		return cls.from_bytes(bytes(blob), arch, base=base)
+
+	@classmethod
 	def from_irsb(cls, blob, cs_instructions, irsb):
 		vex_instructions = ir.irsb_to_instructions(irsb)
 		return cls(blob, irsb.arch, irsb.addr, cs_instructions, vex_instructions, ir_tyenv=irsb.tyenv, ir_jumpkind=irsb.jumpkind)
@@ -204,8 +211,15 @@ class BasicBlock(BlockBase):
 			return False
 		return parent.is_direct_child_of(self.address)
 
-	def permutation(self):
+	def permutation_count(self):
 		constraints = self.to_digraph()
+		all_permutations = path_permutations(constraints)
+		return len(all_permutations)
+
+	def permutation_source(self):
+		constraints = self.to_digraph()
+		#constraints = tailor.alter(constraints, self.arch)
+
 		instructions = collections.deque()
 		# the initial choices are any node without a predecessor (dependency)
 		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
@@ -222,17 +236,10 @@ class BasicBlock(BlockBase):
 				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
 					continue
 				choices.add(successor)
+		return self.to_source(instructions)
 
-		blob = b''.join(bytes(ins) for ins in instructions)
-		return self.__class__.from_bytes(blob, self.arch, self.address)
-
-	def permutation_count(self):
-		constraints = self.to_digraph()
-		all_permutations = path_permutations(constraints)
-		return len(all_permutations)
-
-	def source_iter(self):
-		# step 1: process start of block labels based on the parents
+	def source_iter(self, instructions=None):
+		# step 1: process start-of-block labels based on the parents
 		func_set = loc_set = False
 		for parent in self.parents.values():
 			if not loc_set and parent.ir_jumpkind == ir.JumpKind.Boring and parent.next_address != self.address:
@@ -243,7 +250,7 @@ class BasicBlock(BlockBase):
 				yield SourceLineLabel("func_{0:04x}".format(self.address))
 
 		# step 2: process all but the last instruction (which may be a call / jump and must be handled separately)
-		instructions = tuple(self.instructions.values())
+		instructions = tuple(instructions or self.instructions.values())
 		for ins in instructions[:-1]:
 			yield SourceLine(ins.source)
 
