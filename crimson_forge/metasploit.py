@@ -68,8 +68,9 @@ metadata = {
 	'authors': ['Spencer McIntyre'],
 	'license': 'MSF_LICENSE',
 	'type': 'evasion',
-	'advanced_options': {
+	'options': {
 		'LOG_LEVEL': {
+			'advanced': True,
 			'type': 'enum',
 			'description': 'The log level',
 			'required': True,
@@ -77,13 +78,14 @@ metadata = {
 			'values': ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 		},
 		'LOG_NAME': {
+			'advanced': True,
 			'type': 'string',
 			'description': 'The name of the root logger',
 			'required': False,
 			'default': 'crimson-forge'
 		},
 	},
-	'default_options': {
+	'describe_payload_options': {
 		'AutoLoadStdapi': False,
 		'AutoSystemInfo': False,
 	},
@@ -96,7 +98,7 @@ metadata = {
 def run(msf_options):
 	module.LogHandler.setup(level=msf_options['LOG_LEVEL'], name=msf_options['LOG_NAME'])
 
-	target = targets[msf_options['target']['name']]
+	target = targets[msf_options['target']]
 	cli_args = target['options'].copy()
 	cli_args.extend(['--format', 'raw'])
 	cli_args.extend(['--output-format', 'pe:exe'])
