@@ -34,7 +34,6 @@ import collections
 import collections.abc
 import io
 import logging
-import re
 
 import crimson_forge.base as base
 import crimson_forge.block as block
@@ -45,7 +44,6 @@ import crimson_forge.utilities as utilities
 import angr
 import capstone
 import graphviz
-import tabulate
 
 logger = logging.getLogger('crimson-forge.binary')
 
@@ -103,6 +101,7 @@ class _Blocks(collections.OrderedDict):
 class ExecutableSegment(base.Base):
 	def __init__(self, blob, arch, base=0x1000):
 		super(ExecutableSegment, self).__init__(blob, arch, base)
+		self.entry_address = self.address
 		self._md = capstone.Cs(self.arch.cs_arch, self.arch.cs_mode)
 		self._md.detail = True
 		# the mnemonic filter in some of the instruction post-processors requires intel syntax and not at&t so
@@ -120,6 +119,11 @@ class ExecutableSegment(base.Base):
 		self.blocks = _Blocks((addr, self.blocks[addr]) for addr in sorted(self.blocks.keys()))
 		for block in self.blocks.values():
 			self.vex_instructions.update(block.vex_instructions.items())
+
+		# prune capstone instructions without corresponding vex instructions
+		for ins_addr in tuple(self.cs_instructions.keys()):
+			if ins_addr not in self.vex_instructions:
+				del self.cs_instructions[ins_addr]
 		self.instructions = _InstructionsProxy(arch, self.cs_instructions, self.blocks)
 
 	def __process_irsb_jump(self, jump):
