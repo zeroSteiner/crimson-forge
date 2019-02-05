@@ -51,6 +51,13 @@ import boltons.strutils
 import boltons.timeutils
 import smoke_zephyr.utilities
 
+BANNER = """
+  ___  _ __ (_) _ __ ___   ___   ___   _ __     / _|  ___   _ __  __ _   ___ 
+ / __|| '__|| || '_ ` _ \ / __| / _ \ | '_ \   | |_  / _ \ | '__|/ _` | / _ \\
+| (__ | |   | || | | | | |\__ \| (_) || | | |  |  _|| (_) || |  | (_| ||  __/
+ \___||_|   |_||_| |_| |_||___/ \___/ |_| |_|  |_|   \___/ |_|   \__, | \___|
+"""
+
 HELP_EPILOG = """\
 analysis profile choices:
   shellcode        analyze the code in the context of inclusive, positionally
@@ -138,6 +145,7 @@ def main(args=None, input_data=None, printer=None):
 	parser.add_argument('--output-format', dest='output_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
+	parser.add_argument('--skip-banner', dest='show_banner', default=True, action='store_false', help='skip printing the banner')
 	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
 	if input_data is None:
 		parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
@@ -152,6 +160,8 @@ def main(args=None, input_data=None, printer=None):
 	gc.set_debug(args.gc_debug_stats | args.gc_debug_leak)
 	printer = printer or crimson_forge.utilities
 
+	if args.show_banner:
+		print(BANNER)
 	printer.print_status("Crimson-Forge Engine: v{0}".format(crimson_forge.__version__))
 	if args.prng_seed:
 		random.seed(args.prng_seed)

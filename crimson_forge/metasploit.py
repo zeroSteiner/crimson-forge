@@ -102,6 +102,7 @@ def run(msf_options):
 	cli_args = target['options'].copy()
 	cli_args.extend(['--format', 'raw'])
 	cli_args.extend(['--output-format', 'pe:exe'])
+	cli_args.extend(['--skip-banner'])
 	cli_args.append(msf_options['FILENAME'])
 	input_data = binascii.a2b_base64(msf_options['payload_raw'])
 	try:
