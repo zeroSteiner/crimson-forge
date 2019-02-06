@@ -281,7 +281,7 @@ class BasicBlock(BlockBase):
 		# step 3: process the last instruction
 		last_ins = instructions[-1]
 		if isinstance(self.arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
-			match = re.match(r'^(?P<jump>(call|j[\S]{1,4}))\s+0x(?P<location>[a-f0-9]+)(\s+;(?P<comment>.*))?$', last_ins.source)
+			match = re.match(r'^(?P<jump>(call|j[\S]{1,4}|loop(n?e)?))\s+0x(?P<location>[a-f0-9]+)(\s+;(?P<comment>.*))?$', last_ins.source)
 			if match:
 				address = int(match.group('location'), 16)
 				comment = ';' + match.group('comment') if match.group('comment') else ''
