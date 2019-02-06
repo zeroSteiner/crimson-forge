@@ -216,7 +216,7 @@ class Instruction(object):
 
 	@classmethod
 	def from_source(cls, source, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
+		blob, _ = arch.keystone.asm(utilities.remove_comments(source), base)
 		return cls.from_bytes(bytes(blob), arch, base=base)
 
 	def pp_asm(self, stream='stdout'):

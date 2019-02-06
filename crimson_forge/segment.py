@@ -105,7 +105,7 @@ class ExecutableSegment(base.Base):
 		self._md = capstone.Cs(self.arch.cs_arch, self.arch.cs_mode)
 		self._md.detail = True
 		# the mnemonic filter in some of the instruction post-processors requires intel syntax and not at&t so
-		# explicitly set it here
+		# explicitly set it here and do not change it
 		self._md.syntax = capstone.CS_OPT_SYNTAX_INTEL
 
 		self.cs_instructions.update((ins.address, ins) for ins in self._disassemble(blob))
