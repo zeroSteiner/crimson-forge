@@ -233,14 +233,14 @@ class Instruction(object):
 			raise NotImplementedError()
 		match = self._regex_jmp.match(self.source)
 		if match:
-			self._jmp_reference = Reference(ReferenceType.ADDRESS, int(match.group('location'), 16))
+			self._jmp_reference = Reference(ReferenceType.BLOCK_ADDRESS, int(match.group('location'), 16))
 		return self._jmp_reference
 
 	@jmp_reference.setter
 	def jmp_reference(self, value):
 		if not isinstance(value, source.Reference):
 			raise TypeError('Must be a Reference instance')
-		if self._jmp_reference and self._jmp_reference.type != ReferenceType.ADDRESS:
+		if self._jmp_reference and self._jmp_reference.type != ReferenceType.BLOCK_ADDRESS:
 			logger.warning('Overwriting non-default jump reference')
 		self._jmp_reference = value
 

@@ -50,9 +50,10 @@ def label_maker(location, prefix='loc', scope=''):
 
 @enum.unique
 class ReferenceType(enum.Enum):
-	ADDRESS = 'address'  # this is the default
-	BLOCK = 'block'
-	INSTRUCTION = 'instruction'
+	ADDRESS = 'address'              # the value is an absolute address, go there
+	BLOCK = 'block'                  # the value is a block, go to it's first instruction
+	BLOCK_ADDRESS = 'block-address'  # the value is an address, go to the first instruction of the block it's in
+	INSTRUCTION = 'instruction'      # the value is a specific instruction, go there
 
 # this is a reference target used to provide context for how labels should be
 # generated based on what they're referring to
@@ -76,8 +77,14 @@ class SourceLineLabel(SourceLine):
 class SourceCode(object):
 	def __init__(self, arch):
 		self.arch = arch
+		# These three _ref_ attributes map various *things* to SourceLine instances. This allows the SourceLine
+		# instances to be referred to in multiple ways (as defined by ReferenceType). The default (address) is
+		# used to look up the block to which an address belongs before the block is used. Under normal conditions, the
+		# destination would by definition be the first address in a block, but in the case where a the source was
+		# randomized the address may have been moved deeper in the block.
 		self._ref_addresses = collections.defaultdict(collections.deque)
 		self._ref_blocks = {}
+		self._ref_block_addresses = collections.defaultdict(collections.deque)
 		self._ref_instructions = {}
 		self._lines = []
 		self._labels = {}
@@ -98,6 +105,8 @@ class SourceCode(object):
 				elif jmp_reference.type == ReferenceType.BLOCK:
 					label = label_maker(self._relative_references, scope='rel')
 					self._relative_references += 1
+				elif jmp_reference.type == ReferenceType.BLOCK_ADDRESS:
+					label = label_maker(jmp_reference.value)
 				elif jmp_reference.type == ReferenceType.INSTRUCTION:
 					label = label_maker(self._relative_references, scope='rel')
 					self._relative_references += 1
@@ -109,8 +118,10 @@ class SourceCode(object):
 				src_line = SourceLine("{} {}".format(match.group('jump'), label), comment=match.group('comment'))
 			else:
 				src_line = SourceLine(thing.source)
-			if idx == 0 and block:
-				self._ref_blocks[block.address] = src_line
+			if block:
+				if idx == 0:
+					self._ref_blocks[block.address] = src_line
+				self._ref_block_addresses[thing.address] = self._ref_blocks[block.address]
 			self._ref_instructions[thing] = src_line
 			self._ref_addresses[thing.address].append(src_line)
 			self._lines.append(src_line)
@@ -122,10 +133,12 @@ class SourceCode(object):
 			if jmp_reference.type == ReferenceType.ADDRESS:
 				if jmp_reference.value in self._ref_addresses:
 					src_line = self._ref_addresses[jmp_reference.value][0]
-			elif jmp_reference.type == ReferenceType.INSTRUCTION:
-				src_line = self._ref_instructions.get(jmp_reference.value)
 			elif jmp_reference.type == ReferenceType.BLOCK:
 				src_line = self._ref_blocks.get(jmp_reference.value.address)
+			elif jmp_reference.type == ReferenceType.BLOCK_ADDRESS:
+				src_line = self._ref_block_addresses.get(jmp_reference.value)
+			elif jmp_reference.type == ReferenceType.INSTRUCTION:
+				src_line = self._ref_instructions.get(jmp_reference.value)
 			else:
 				raise TypeError('unknown jump reference type')
 			if src_line is None:
