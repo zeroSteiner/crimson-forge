@@ -31,11 +31,13 @@
 #
 
 # tailors make alterations so that's what we're going to do here
+import ast
 import collections
 import functools
 import logging
 import random
 import re
+import struct
 
 import crimson_forge.ir as ir
 import crimson_forge.instruction as instruction
@@ -54,25 +56,33 @@ alterations = collections.defaultdict(list)
 def register_alteration():
 	def decorator(Alteration):
 		@functools.wraps(Alteration.run)
-		def wrapper(graph, arch):
+		def wrapper(block, graph):
+			arch = block.arch
 			logger.info("Using %s alteration: %s", arch.name, Alteration.name)
 			alteration = Alteration(arch)
-			return alteration.run(graph)
+			return alteration.run(block, graph)
 		for arch in Alteration.architectures:
 			alterations[arch.name].append(wrapper)
 		return wrapper
 	return decorator
 
-def alter(graph, arch, modifier=1.0, iterations=1):
+def alter(block, modifier=1.0, iterations=1):
+	arch = block.arch
+	graph = block.to_digraph()
 	if arch.name not in alterations:
 		raise NotImplementedError('No alterations implemented for arch: ' + arch.name)
 	while iterations > 0:
 		for alteration in alterations[arch.name]:
 			if random.random() > modifier:
 				continue
-			graph = alteration(graph, arch) or graph
+			graph = alteration(block, graph) or graph
 		iterations -= 1
 	return graph
+
+def _resub_relative_address(match, address=0):
+	value = ast.literal_eval(match.group('offset')[1:])
+	value += address
+	return " 0x{:x}".format(value)
 
 class AlterationBase(object):
 	architectures = ()
@@ -80,6 +90,9 @@ class AlterationBase(object):
 	name = 'unknown'
 	def __init__(self, arch):
 		self.arch = arch
+
+	def _preprocess_source_line(self, source, address):
+		return re.sub('\s(?P<offset>\$[+-](0x[a-f0-9]+|[0-9]+))(?=\s|;|$)', functools.partial(_resub_relative_address, address=address), source)
 
 	def check_instruction(self, ins):
 		raise NotImplementedError()
@@ -91,18 +104,23 @@ class AlterationBase(object):
 		raise NotImplementedError()
 
 	def inject_instructions(self, graph, orig_ins, new_instructions):
-		new_instructions = tuple(
-			instruction.Instruction.from_source(ins_src, self.arch, orig_ins.address) for ins_src in new_instructions
-		)
+		instructions = collections.deque()
+		for new_ins in new_instructions:
+			if isinstance(new_ins, str):
+				new_ins = self._preprocess_source_line(new_ins, orig_ins.address)
+				new_ins = instruction.Instruction.from_source(new_ins, self.arch, orig_ins.address)
+			elif not isinstance(new_ins, instruction.Instruction):
+				raise TypeError('new instruction must be str or Instruction instance')
+			instructions.append(new_ins)
 		for predecessor in tuple(graph.predecessors(orig_ins)):
 			graph.remove_edge(predecessor, orig_ins)
-			graph.add_edge(predecessor, new_instructions[0])
+			graph.add_edge(predecessor, instructions[0])
 		for successor in tuple(graph.successors(orig_ins)):
 			graph.remove_edge(orig_ins, successor)
-			graph.add_edge(new_instructions[-1], successor)
-		for ins in new_instructions:
+			graph.add_edge(instructions[-1], successor)
+		for ins in instructions:
 			graph.add_node(ins)
-		for predecessor, successor in boltons.iterutils.pairwise(new_instructions):
+		for predecessor, successor in boltons.iterutils.pairwise(instructions):
 			graph.add_edge(predecessor, successor)
 		graph.remove_node(orig_ins)
 
@@ -134,11 +152,15 @@ class AlterationBase(object):
 amd64 = archinfo.ArchAMD64()
 x86 = archinfo.ArchX86()
 
+def _re_match(regex, ins):
+	regex += r'(\s+;.*)?$'
+	return re.match(regex, ins.source, flags=re.IGNORECASE)
+
 @register_alteration()
 class PushValue(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'push_value'
-	def run(self, graph):
+	def run(self, block, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
 			match = re.match(r'^push (?P<value>\S+)', ins.source)
@@ -156,7 +178,7 @@ class PushValue(AlterationBase):
 class PopValue(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'pop_value'
-	def run(self, graph):
+	def run(self, block, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
 			match = re.match(r'^pop (?P<value>\S+)', ins.source)
@@ -173,7 +195,7 @@ class PopValue(AlterationBase):
 class MoveConstant(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'move_constant'
-	def run(self, graph):
+	def run(self, block, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
 			match = re.match(r'^mov (?P<register>\S+), 0x(?P<value>[a-f0-9]+)', ins.source)
@@ -189,3 +211,22 @@ class MoveConstant(AlterationBase):
 				"mov {}, 0x{:x}".format(reg.name, value),
 				"add {}, 0x{:x}".format(reg.name, modifier)
 			))
+
+@register_alteration()
+class ReplaceJCXZ(AlterationBase):
+	architectures = (amd64, x86)
+	name = 'replace_jcxz'
+	def run(self, block, graph):
+		ins = tuple(graph.nodes)[-1]
+		match = _re_match(r'^(?P<jump>j[er]?cxz) 0x(?P<value>[a-f0-9]+)', ins)
+		if match is None:
+			return
+		value = int(match.group('value'), 16)
+		# keystone doesn't have a way for us to create a jmp instruction of a deterministic size so we create an
+		# Instruction instance from bytes manually to ensure it's always 5 bytes long
+		new_opcode = b'\xe9' + struct.pack('<i', value - ins.address - 5)
+		self.inject_instructions(graph, ins, (
+			"{} $+4".format(match.group('jump')),
+			"jmp $+7",
+			instruction.Instruction.from_bytes(new_opcode, self.arch, base=ins.address)
+		))
