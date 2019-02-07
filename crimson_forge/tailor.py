@@ -88,11 +88,9 @@ class AlterationBase(object):
 	architectures = ()
 	modifies_size = True
 	name = 'unknown'
+	_regex_relative = re.compile('\s(?P<offset>\$[+-](0x[a-f0-9]+|[0-9]+))(?=\s|;|$)')
 	def __init__(self, arch):
 		self.arch = arch
-
-	def _preprocess_source_line(self, source, address):
-		return re.sub('\s(?P<offset>\$[+-](0x[a-f0-9]+|[0-9]+))(?=\s|;|$)', functools.partial(_resub_relative_address, address=address), source)
 
 	def check_instruction(self, ins):
 		raise NotImplementedError()
@@ -107,7 +105,7 @@ class AlterationBase(object):
 		instructions = collections.deque()
 		for new_ins in new_instructions:
 			if isinstance(new_ins, str):
-				new_ins = self._preprocess_source_line(new_ins, orig_ins.address)
+				new_ins = self._regex_relative.sub(functools.partial(_resub_relative_address, address=orig_ins.address), new_ins)
 				new_ins = instruction.Instruction.from_source(new_ins, self.arch, orig_ins.address)
 			elif not isinstance(new_ins, instruction.Instruction):
 				raise TypeError('new instruction must be str or Instruction instance')
@@ -123,6 +121,7 @@ class AlterationBase(object):
 		for predecessor, successor in boltons.iterutils.pairwise(instructions):
 			graph.add_edge(predecessor, successor)
 		graph.remove_node(orig_ins)
+		return instructions
 
 	# write to a pointer
 	def ins_mov_ptr_val(self, register, value, width=None):
@@ -225,8 +224,10 @@ class ReplaceJCXZ(AlterationBase):
 		# keystone doesn't have a way for us to create a jmp instruction of a deterministic size so we create an
 		# Instruction instance from bytes manually to ensure it's always 5 bytes long
 		new_opcode = b'\xe9' + struct.pack('<i', value - ins.address - 5)
-		self.inject_instructions(graph, ins, (
+		ins_1, ins_2, ins_3, = self.inject_instructions(graph, ins, (
 			"{} $+4".format(match.group('jump')),
 			"jmp $+7",
 			instruction.Instruction.from_bytes(new_opcode, self.arch, base=ins.address)
 		))
+		ins_1.jmp_reference = instruction.Reference(instruction.ReferenceType.INSTRUCTION, ins_3)
+		ins_2.jmp_reference = instruction.Reference(instruction.ReferenceType.BLOCK, block.children[block.next_address])

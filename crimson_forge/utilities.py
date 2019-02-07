@@ -86,12 +86,6 @@ def print_warning(message):
 		prefix = termcolor.colored(prefix, 'yellow', attrs=['bold'])
 	print(prefix + message)
 
-def remove_comments(source, comment_char=';'):
-	"""Remove comments from assembly source."""
-	# todo: this should use a regex incase theres a ';' in the source
-	lines = source.split('\n')
-	return '\n'.join([line.split(comment_char, 1)[0].rstrip() for line in lines])
-
 class ColoredLogFormatter(logging.Formatter):
 	"""
 	A formatting class suitable for use with the :py:mod:`logging` module which

@@ -35,20 +35,17 @@ import collections.abc
 import itertools
 import logging
 import random
-import re
 
 import crimson_forge.base as base
 import crimson_forge.ir as ir
+import crimson_forge.source as source
 import crimson_forge.ssa as ssa
 import crimson_forge.tailor as tailor
-import crimson_forge.utilities as utilities
 
-import archinfo
 import boltons.iterutils
 import graphviz
 import networkx
 import networkx.algorithms
-import tabulate
 
 logger = logging.getLogger('crimson-forge.basic-block')
 
@@ -97,32 +94,7 @@ class _InstructionsProxy(base.InstructionsProxy):
 	def _resolve_ir(self, address):
 		return self._vex_instructions[address], self._ir_tyenv
 
-class SourceLine(object):
-	__slots__ = ('code', 'comment')
-	def __init__(self, code, comment=None):
-		self.code = code
-		self.comment = comment
-
-	@property
-	def text(self):
-		return
-
-class SourceLineLabel(SourceLine):
-	def __init__(self, label, comment=None):
-		self.code = label + ':'
-		self.comment = comment
-
 class BlockBase(base.Base):  # yo dawg I head you like base classes
-	def to_source(self, *args, **kwargs):
-		lines = collections.deque()
-		for src_line in self.source_iter(*args, **kwargs):
-			comment = '' if src_line.comment is None else '; ' + src_line.comment
-			if isinstance(src_line, SourceLineLabel):
-				lines.append((src_line.code, comment))
-			else:
-				lines.append(('  ' + src_line.code, comment))
-		return tabulate.tabulate(lines, disable_numparse=True, stralign=None, tablefmt='plain') + '\n'
-
 	def source_iter(self):
 		raise NotImplementedError()
 
@@ -155,7 +127,7 @@ class DataBlock(BlockBase):
 				if divider and pos and (pos + 1) % divider == 0:
 					ascii_col += ' '
 			hex_col = hex_col[:-3 if pos and (pos + 1) % divider == 0 else -1]
-			yield SourceLine(offset_col + hex_col + " ; +0x{:>04x}  ".format(row * chunk_size) + ascii_col)
+			yield source.SourceLine(offset_col + hex_col + " ; +0x{:>04x}  ".format(row * chunk_size) + ascii_col)
 
 class BasicBlock(BlockBase):
 	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv, ir_jumpkind):
@@ -214,8 +186,8 @@ class BasicBlock(BlockBase):
 		return cls.from_irsb(blob, cs_instructions, ir.lift(blob, base, arch))
 
 	@classmethod
-	def from_source(cls, source, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
+	def from_source(cls, text, arch, base=0x1000):
+		blob, _ = arch.keystone.asm(source.remove_comments(text), base)
 		return cls.from_bytes(bytes(blob), arch, base=base)
 
 	@classmethod
@@ -240,9 +212,9 @@ class BasicBlock(BlockBase):
 		all_permutations = path_permutations(constraints)
 		return len(all_permutations)
 
-	def permutation_source(self):
-		constraints = self.to_digraph()
-		constraints = tailor.alter(constraints, self.arch)
+	def permutation_instructions(self):
+		#constraints = self.to_digraph()
+		constraints = tailor.alter(self)
 
 		instructions = collections.deque()
 		# the initial choices are any node without a predecessor (dependency)
@@ -260,40 +232,7 @@ class BasicBlock(BlockBase):
 				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
 					continue
 				choices.add(successor)
-		return self.to_source(instructions)
-
-	def source_iter(self, instructions=None):
-		# step 1: process start-of-block labels based on the parents
-		func_set = loc_set = False
-		for parent in self.parents.values():
-			if not loc_set and parent.ir_jumpkind == ir.JumpKind.Boring and parent.next_address != self.address:
-				loc_set = True
-				yield SourceLineLabel("loc_{0:04x}".format(self.address))
-			if not func_set and parent.ir_jumpkind == ir.JumpKind.Call:
-				func_set = True
-				yield SourceLineLabel("func_{0:04x}".format(self.address))
-
-		# step 2: process all but the last instruction (which may be a call / jump and must be handled separately)
-		instructions = tuple(instructions or self.instructions.values())
-		for ins in instructions[:-1]:
-			yield SourceLine(ins.source)
-
-		# step 3: process the last instruction
-		last_ins = instructions[-1]
-		if isinstance(self.arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
-			match = re.match(r'^(?P<jump>(call|j[\S]{1,4}|loop(n?e)?))\s+0x(?P<location>[a-f0-9]+)(\s+;(?P<comment>.*))?$', last_ins.source)
-			if match:
-				address = int(match.group('location'), 16)
-				comment = ';' + match.group('comment') if match.group('comment') else ''
-				if address in self.children:
-					yield SourceLine("{} {}_{:04x}".format(match.group('jump'), ('func' if match.group('jump') == 'call' else 'loc'), address) + comment)
-				else:
-					logger.warning('Instruction references non-child block')
-					yield SourceLine(last_ins.source)
-			else:
-				yield SourceLine(last_ins.source)
-		else:
-			raise NotImplementedError('Source iteration is not implemented for arch: ' + self.arch.name)
+		return instructions
 
 	def split(self, address):
 		# split this block at the specified address (which can not be the first address) into two,

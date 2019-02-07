@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  crimson_forge/executablesegment.py
+#  crimson_forge/segment.py
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are
@@ -38,8 +38,8 @@ import logging
 import crimson_forge.base as base
 import crimson_forge.block as block
 import crimson_forge.ir as ir
+import crimson_forge.source as source
 import crimson_forge.ssa as ssa
-import crimson_forge.utilities as utilities
 
 import angr
 import capstone
@@ -231,8 +231,8 @@ class ExecutableSegment(base.Base):
 		return self.address
 
 	@classmethod
-	def from_source(cls, source, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(utilities.remove_comments(source))
+	def from_source(cls, text, arch, base=0x1000):
+		blob, _ = arch.keystone.asm(source.remove_comments(text), base)
 		return cls(bytes(blob), arch, base=base)
 
 	@classmethod
@@ -246,8 +246,10 @@ class ExecutableSegment(base.Base):
 		return self.__class__(blob, self.arch, self.base)
 
 	def permutation_bytes(self):
-		source = self.permutation_source()
-		return bytes(self.arch.keystone.asm(source, self.address)[0])
+		src_code = self.permutation_source()
+		exec_seg_src = str(src_code)
+		exec_seg_src = source.remove_comments(exec_seg_src)
+		return bytes(self.arch.keystone.asm(exec_seg_src, self.address)[0])
 
 	def permutation_count(self):
 		count = 1
@@ -258,15 +260,15 @@ class ExecutableSegment(base.Base):
 		return count
 
 	def permutation_source(self):
-		source = ''
+		src_code = source.SourceCode(self.arch)
 		for blk in self.blocks.values():
 			if isinstance(blk, block.DataBlock):
-				source += blk.to_source()
+				src_code.extend(blk.source_iter(), blk)
 			elif isinstance(blk, block.BasicBlock):
-				source += blk.permutation_source()
+				src_code.extend(blk.permutation_instructions(), blk)
 			else:
 				raise TypeError('block type is not supported')
-		return source
+		return src_code
 
 	@property
 	def ssa_variables(self):
@@ -282,8 +284,8 @@ class ExecutableSegment(base.Base):
 		})
 		return project
 
-	def to_source(self):
-		source = "; base address: 0x{:04x}\n_start:\n".format(self.address)
-		for blk in self.blocks.values():
-			source += blk.to_source()
-		return source
+	#def to_source(self):
+	#	source = "; base address: 0x{:04x}\n_start:\n".format(self.address)
+	#	for blk in self.blocks.values():
+	#		source += blk.to_source()
+	#	return source

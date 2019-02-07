@@ -34,10 +34,11 @@ import binascii
 import collections
 import functools
 import logging
+import re
 import sys
 
 import crimson_forge.ir as ir
-import crimson_forge.utilities as utilities
+import crimson_forge.source as source
 
 import archinfo
 import pyvex
@@ -69,6 +70,9 @@ def match_mask(data, mask, byte_width=8):
 		return False
 	return integer == 0
 
+Reference = source.Reference
+ReferenceType = source.ReferenceType
+
 postprocessors = collections.defaultdict(list)
 def register_postprocessor(*architectures, byte_mask=None, mnemonic=None):
 	if isinstance(mnemonic, str):
@@ -92,12 +96,14 @@ def register_postprocessor(*architectures, byte_mask=None, mnemonic=None):
 _InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
 # hashable
 class Instruction(object):
+	_regex_jmp = re.compile(r'^(?P<jump>(call|j[\S]{1,4}|loop(n?e)?))\s+0x(?P<location>[a-f0-9]+)(\s+;(?P<comment>.*))?$')
 	def __init__(self, arch, cs_ins, vex_statements, ir_tyenv):
 		self.arch = arch
 		self.cs_instruction = cs_ins
 		self.vex_statements = vex_statements
 		self._ir_tyenv = ir_tyenv
 		self.dirty = False
+		self._jmp_reference = None
 
 		self.registers = _InstructionRegisters(set(), set(), set())
 		vex_statements = self._fixup_vex_stmts(vex_statements.copy())
@@ -215,9 +221,28 @@ class Instruction(object):
 		return cls(arch, cs_ins, vex_statements, irsb.tyenv)
 
 	@classmethod
-	def from_source(cls, source, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(utilities.remove_comments(source), base)
+	def from_source(cls, text, arch, base=0x1000):
+		blob, _ = arch.keystone.asm(source.remove_comments(text), base)
 		return cls.from_bytes(bytes(blob), arch, base=base)
+
+	@property
+	def jmp_reference(self):
+		if self._jmp_reference:
+			return self._jmp_reference
+		if not isinstance(self.arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
+			raise NotImplementedError()
+		match = self._regex_jmp.match(self.source)
+		if match:
+			self._jmp_reference = Reference(ReferenceType.ADDRESS, int(match.group('location'), 16))
+		return self._jmp_reference
+
+	@jmp_reference.setter
+	def jmp_reference(self, value):
+		if not isinstance(value, source.Reference):
+			raise TypeError('Must be a Reference instance')
+		if self._jmp_reference and self._jmp_reference.type != ReferenceType.ADDRESS:
+			logger.warning('Overwriting non-default jump reference')
+		self._jmp_reference = value
 
 	def pp_asm(self, stream='stdout'):
 		formatted = "0x{:04x}  {} {}".format(self.address, self.bytes_hex, self.source)
