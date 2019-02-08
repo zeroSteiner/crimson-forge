@@ -154,7 +154,7 @@ class SourceCode(object):
 	def __init__(self, arch):
 		self.arch = arch
 		# These three _ref_ attributes map various *things* to SourceLine instances. This allows the SourceLine
-		# instances to be referred to in multiple ways (as defined by ReferenceType). The default (address) is
+		# instances to be referred to in multiple ways (as defined by ReferenceType). The default (block-address) is
 		# used to look up the block to which an address belongs before the block is used. Under normal conditions, the
 		# destination would by definition be the first address in a block, but in the case where a the source was
 		# randomized the address may have been moved deeper in the block.

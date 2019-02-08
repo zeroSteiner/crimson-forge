@@ -1,0 +1,8 @@
+--log-level
+DEBUG
+--output-format
+pe:exe
+--output-format
+raw
+--output-format
+source
