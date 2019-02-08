@@ -31,6 +31,8 @@
 #
 
 import argparse
+import collections
+import contextlib
 import datetime
 import enum
 import gc
@@ -76,11 +78,17 @@ architectures = {
 	'x86': archinfo.ArchX86(),
 }
 
+_DataFormatSpec = collections.namedtuple('_DataFormatSpec', ('value', 'extension'))
 @enum.unique
 class DataFormat(enum.Enum):
-	PE_EXE = 'pe:exe'
-	RAW = 'raw'
-	SOURCE = 'source'
+	def __new__(cls, value, extension, **kwargs):
+		obj = object.__new__(cls)
+		obj._value_ = value
+		obj.extension = extension
+		return obj
+	PE_EXE = _DataFormatSpec('pe:exe', 'exe')
+	RAW = _DataFormatSpec('raw', 'bin')
+	SOURCE = _DataFormatSpec('source', 'asm')
 
 @enum.unique
 class AnalysisProfile(enum.Enum):
@@ -105,20 +113,44 @@ def hash(data, algorithm='sha256'):
 	return hashlib.new(algorithm, data).hexdigest()
 
 def _handle_output(args, printer, arch, data):
-	if args.output_format == DataFormat.PE_EXE:
-		if not isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
+	if DataFormat.PE_EXE in args.output_format:
+		if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
+			pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
+			printer.print_status('PE output hash (SHA-256): ' + hash(pe_data))
+			with _handle_output_file(args, arch, DataFormat.PE_EXE) as file_h:
+				file_h.write(pe_data)
+		else:
 			printer.print_error('Unsupported architecture for PE output: ' + arch.name)
-			return
-		pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
-		printer.print_status('PE output hash (SHA-256): ' + hash(pe_data))
-		args.output.write(pe_data)
-	elif args.output_format == DataFormat.RAW:
-		args.output.write(data)
-	elif args.output_format == DataFormat.SOURCE:
+
+	if DataFormat.RAW in args.output_format:
+		with _handle_output_file(args, arch, DataFormat.RAW) as file_h:
+			file_h.write(data)
+
+	if DataFormat.SOURCE in args.output_format:
 		o_exec_seg = crimson_forge.segment.ExecutableSegment(data, arch)
-		args.output.write(o_exec_seg.to_source().encode('utf-8'))
-	else:
-		printer.print_error('Unsupported output format: ' + args.input_format)
+		text = str(o_exec_seg.to_source())
+		with _handle_output_file(args, arch, DataFormat.SOURCE) as file_h:
+			file_h.write(text.encode('utf-8'))
+
+@contextlib.contextmanager
+def _handle_output_file(args, arch, format):
+	output_path = args.output
+	if len(args.output_format) > 1:
+		# if the user specified multiple output formats set the extension for them, otherwise leave it
+		output_path += ".{}.{}".format(arch.name.lower(), format.extension)
+	with open(output_path, 'wb') as file_h:
+		yield file_h
+
+class AppendOverrideDefaultAction(argparse.Action):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.reset_dest = True
+
+	def __call__(self, parser, namespace, value, option_string=None):
+		if self.reset_dest:
+			setattr(namespace, self.dest, [])
+			self.reset_dest = False
+		getattr(namespace, self.dest).append(value)
 
 def main(args=None, input_data=None, printer=None):
 	start_time = datetime.datetime.utcnow()
@@ -142,14 +174,14 @@ def main(args=None, input_data=None, printer=None):
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format (see: data format choices)')
 	parser.add_argument('-v', '--version', action='version', version='%(prog)s Version: ' + crimson_forge.__version__)
 	parser.add_argument('--analysis-profile', dest='analysis_profile', default=None, metavar='PROFILE', type=argtype_analysis_profile, help='the analysis profile to use (see: analysis profile choices)')
-	parser.add_argument('--output-format', dest='output_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
+	parser.add_argument('--output-format', dest='output_format', default=[DataFormat.RAW], action=AppendOverrideDefaultAction, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('--skip-banner', dest='show_banner', default=True, action='store_false', help='skip printing the banner')
 	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
 	if input_data is None:
 		parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
-	parser.add_argument('output', nargs='?', type=argparse.FileType('wb'), help='the optional output file')
+	parser.add_argument('output', nargs='?', help='the optional output file')
 
 	args = parser.parse_args(args)
 	smoke_zephyr.utilities.configure_stream_logger(
