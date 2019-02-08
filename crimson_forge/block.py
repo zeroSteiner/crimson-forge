@@ -103,31 +103,23 @@ class DataBlock(BlockBase):
 		return "<{} arch: {}, at: 0x{:04x}, size: {}, data: {!r} >".format(self.__class__.__name__, self.arch.name, self.address, self.size, self.bytes)
 
 	def source_iter(self):
-		divider = 4
 		chunk_size = 8
 		for row, chunk in enumerate(boltons.iterutils.chunked(bytearray(self.bytes), chunk_size, fill=-1)):
-			offset_col = ".byte "
 			ascii_col = ''
-			hex_col = ''
-			pos = 0
-			for pos, byte in enumerate(chunk):
-				if byte == -1:
-					hex_col = hex_col[:-2] + '        '
-				else:
-					hex_col += "0x{0:02x}, ".format(byte)
-				if divider and pos and (pos + 1) % divider == 0:
-					hex_col += ' '
-
+			hex_bytes = []
+			for byte in chunk:
+				if byte != -1:
+					hex_bytes.append("0x{0:02x}".format(byte))
 				if byte == -1:
 					ascii_col += ' '
 				elif byte < 32 or byte > 126:
 					ascii_col += '.'
 				else:
 					ascii_col += chr(byte)
-				if divider and pos and (pos + 1) % divider == 0:
-					ascii_col += ' '
-			hex_col = hex_col[:-3 if pos and (pos + 1) % divider == 0 else -1]
-			yield source.SourceLine(offset_col + hex_col + " ; +0x{:>04x}  ".format(row * chunk_size) + ascii_col)
+			yield source.SourceLine(
+				".byte {}".format(', '.join(hex_bytes)),
+				comment="+0x{:>04x}  ".format(row * chunk_size) + ascii_col
+			)
 
 class BasicBlock(BlockBase):
 	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv, ir_jumpkind):

@@ -88,7 +88,7 @@ class SelfReferenceTracker(angr.SimStatePlugin):
 		if not (reg & ir.IRRegister.from_arch(state.arch, 'ip')):
 			return
 		if any(symbol.variables & state.inspect.reg_write_expr.variables for symbol in self.taint.keys()):
-			print('self reference identified')
+			pass  # self reference identified
 
 	def _breakpoint_mem_read(self, state):
 		if not state.regs.ip.concrete:

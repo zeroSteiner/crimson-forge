@@ -35,7 +35,6 @@ import enum
 import logging
 
 import archinfo
-import tabulate
 
 logger = logging.getLogger('crimson-forge.source')
 
@@ -239,4 +238,8 @@ class SourceCode(object):
 				text_lines.append((src_line.code, comment))
 			else:
 				text_lines.append(('  ' + src_line.code, comment))
-		return tabulate.tabulate(text_lines, disable_numparse=True, stralign=None, tablefmt='plain') + '\n'
+		alignment = max(len(text_line[0]) for text_line in text_lines) + 1
+		output = ''
+		for code, comment in text_lines:
+			output += "{code: <{alignment}}  {comment}".format(code=code, alignment=alignment, comment=comment).rstrip() + '\n'
+		return output

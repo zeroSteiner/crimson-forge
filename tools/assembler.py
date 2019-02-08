@@ -38,6 +38,10 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import crimson_forge
 import crimson_forge.cli as cli
+import crimson_forge.source as source
+import crimson_forge.utilities as utilities
+
+import keystone
 
 architectures = cli.architectures
 
@@ -53,10 +57,24 @@ def main():
 	parser.add_argument('input', type=argparse.FileType('r'), help='the input file')
 	parser.add_argument('output', type=argparse.FileType('wb'), help='the output file')
 	args = parser.parse_args()
+	printer = crimson_forge.utilities
 
 	arch = architectures[args.arch]
-	source = args.input.read()
-	assembled = bytes(arch.keystone.asm(source, 0x1000)[0])
+	text = args.input.read()
+	text = source.remove_comments(text)
+	try:
+		assembled = bytes(arch.keystone.asm(text, 0x1000)[0])
+	except keystone.KsError as error:
+		printer.print_error("Error: {}".format(error.message))
+		asm_count = error.get_asm_count()
+		if asm_count is not None:
+			lines = text.split('\n')
+			start = max(0, asm_count - 3)
+			end = min(len(lines), asm_count + 3)
+			for lineno, line in enumerate(lines[start:end], start):
+				print(" {: >2} {: >4}: {}".format(('->' if lineno == asm_count else ''), lineno, line))
+		return
+
 	args.output.write(assembled)
 
 if __name__ == '__main__':

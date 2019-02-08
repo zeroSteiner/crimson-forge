@@ -31,7 +31,9 @@
 #
 
 import collections
+import re
 
+import archinfo
 import pyvex
 import pyvex.lifting.util.vex_helper
 
@@ -106,7 +108,15 @@ class IRRegister(object):
 
 	@classmethod
 	def from_arch(cls, arch, name):
+		# todo: remove this dirty hack once https://github.com/angr/archinfo/pull/57 is landed
+		modifier = 0
+		if isinstance(arch, archinfo.ArchAMD64):
+			match = re.match(r'r\d+(?P<variant>[dwb])', name)
+			if match is not None:
+				modifier = {'d': -4, 'w': -6, 'b': -7}[match.group('variant')]
+				name = name[:-1]
 		offset, size = arch.registers[name]
+		size += modifier
 		offset *= arch.byte_width
 		return cls(arch, range(offset, offset + (size * arch.byte_width)))
 

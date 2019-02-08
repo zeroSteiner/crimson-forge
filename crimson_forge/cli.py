@@ -247,7 +247,7 @@ def main(args=None, input_data=None, printer=None):
 		printer.print_status('Raw output hash (SHA-256): ' + hash(output_data))
 		_handle_output(args, printer, arch, output_data)
 	else:
-		printer.print_status('To output file specified')
+		printer.print_status('No output file specified')
 
 	elapsed = boltons.timeutils.decimal_relative_time(start_time, datetime.datetime.utcnow())
 	printer.print_status("Completed in {0:.3f} {1}".format(*elapsed))
