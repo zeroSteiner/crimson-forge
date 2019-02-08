@@ -21,6 +21,9 @@ angr = "*"
 ipython = "*"
 ipdb = "*"
 jupyter = "*"
+sphinx = "*"
+sphinx-rtd-theme = "*"
+sphinx-autodoc-typehints = "*"
 
 [scripts]
 crimson-forge = "python -m crimson_forge"

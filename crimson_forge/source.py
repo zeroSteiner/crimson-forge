@@ -39,42 +39,114 @@ import tabulate
 
 logger = logging.getLogger('crimson-forge.source')
 
-def remove_comments(source, comment_char=';'):
-	"""Remove comments from assembly source."""
+def remove_comments(text: str, comment_char: str = ';') -> str:
+	"""
+	Remove comments from the provided assembly source text.
+
+	:param text: The text to remove comments from.
+	:param comment_char: The character marking the start of a comment.
+	:return: The source text without comments.
+	"""
 	# todo: this should use a regex incase theres a ';' in the source
-	lines = source.split('\n')
+	lines = text.split('\n')
 	return '\n'.join([line.split(comment_char, 1)[0].rstrip() for line in lines])
 
-def label_maker(location, prefix='loc', scope=''):
+def label_maker(location: int, prefix: str = 'loc', scope: str = '') -> str:
+	"""
+	Create a label uniquely identifying a location. While the location may be
+	included in the resulting label, the label is not meant to be parsed and
+	should be treated as an opaque piece of data.
+
+	:param location: The location this label refers to, it must be unique among labels.
+	:param prefix: The prefix to place before the label to provide context.
+	:param scope: An optional scope for the label.
+	:return: A string to identity.
+	"""
 	return "{}_{}{:04x}".format(prefix, scope, location)
 
 @enum.unique
 class ReferenceType(enum.Enum):
+	"""The type of the reference."""
 	ADDRESS = 'address'              # the value is an absolute address, go there
+	"""A specific address (relative to the location of the referring instruciton)."""
 	BLOCK = 'block'                  # the value is a block, go to it's first instruction
+	"""A specific block. Resolution will evaluate to the first instruction of the block."""
 	BLOCK_ADDRESS = 'block-address'  # the value is an address, go to the first instruction of the block it's in
+	"""An address in a block. Resolution will evaluate to the first instruction of the block containing the specified address."""
 	INSTRUCTION = 'instruction'      # the value is a specific instruction, go there
+	"""A specific instruction. Resolution will evaluate to the specified instruction instance."""
 
-# this is a reference target used to provide context for how labels should be
-# generated based on what they're referring to
-Reference = collections.namedtuple('Reference', ('type', 'value'))
-
-class SourceLine(object):
-	__slots__ = ('code', 'comment')
-	def __init__(self, code, comment=None):
-		self.code = code
-		self.comment = comment
+class Reference(object):
+	"""
+	A reference to another location in code. This provides context for how
+	labels should be generated.
+	"""
+	__slots__ = ('__weakref__', '_type', '_value')
+	def __init__(self, type: ReferenceType, value):
+		"""
+		:param type: The type of *value*, i.e. how it should be resolved.
+		:param value: The value of the reference (what is being referred to).
+		"""
+		self._type = type
+		self._value = value
 
 	@property
-	def text(self):
-		return
+	def type(self):
+		return self._type
 
+	@property
+	def value(self):
+		return self._value
+
+# hashable, immutable
+class SourceLine(object):
+	"""A instruction and line of assembly source code."""
+	__slots__ = ('__weakref__', '_code', '_comment')
+	def __init__(self, code: str, comment: str = None):
+		"""
+		:param code: The assembly code on this line.
+		:param comment: An optional comment to include when outputting raw code to provide context to human readers.
+		"""
+		self._code = code
+		self._comment = comment
+
+	def __eq__(self, other):
+		if not isinstance(other, self.__class__):
+			return False
+		return hash(self) == hash(other)
+
+	def __hash__(self):
+		return hash(self._code, self._comment)
+
+	@property
+	def code(self):
+		return self._code
+
+	@property
+	def comment(self):
+		return self._comment
+
+# hashable, immutable
 class SourceLineLabel(SourceLine):
-	def __init__(self, label, comment=None):
-		self.code = label + ':'
-		self.comment = comment
+	"""A line of assembly code containing a label definition."""
+	def __init__(self, label: str, comment: str = None):
+		"""
+		:param label: The label on this line.
+		:param comment: An optional comment to include when outputting raw code to provide context to human readers.
+		"""
+		super(SourceLine, self).__init__(label + ':', comment=comment)
+
+	@property
+	def label(self):
+		return self._code[:-1]
 
 class SourceCode(object):
+	"""
+	An object representing the source code representation of a series of
+	instructions of the specified architecture. When this object is converted to
+	a string, labels and references are processed and placed in their
+	corresponding locations.
+	"""
 	def __init__(self, arch):
 		self.arch = arch
 		# These three _ref_ attributes map various *things* to SourceLine instances. This allows the SourceLine
@@ -92,6 +164,14 @@ class SourceCode(object):
 		self._instructions = {}
 
 	def extend(self, things, block=None):
+		"""
+		Add *things* to be included in the source code. The order in which they
+		are added will be the order in which their lines appear in the output.
+
+		:param things: An iterable of objects to add.
+		:param block: The block that *things* are associated with (used for reference building).
+		:type block: :py:class:`~crimson_forge.block.BlockBase`
+		"""
 		for idx, thing in enumerate(things):
 			if isinstance(thing, SourceLine):
 				self._lines.append(thing)
