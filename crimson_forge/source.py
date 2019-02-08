@@ -98,7 +98,7 @@ class Reference(object):
 	def value(self):
 		return self._value
 
-# hashable, immutable
+# mmutable
 class SourceLine(object):
 	"""A instruction and line of assembly source code."""
 	__slots__ = ('__weakref__', '_code', '_comment')
@@ -110,14 +110,6 @@ class SourceLine(object):
 		self._code = code
 		self._comment = comment
 
-	def __eq__(self, other):
-		if not isinstance(other, self.__class__):
-			return False
-		return hash(self) == hash(other)
-
-	def __hash__(self):
-		return hash(self._code, self._comment)
-
 	@property
 	def code(self):
 		return self._code
@@ -126,7 +118,19 @@ class SourceLine(object):
 	def comment(self):
 		return self._comment
 
-# hashable, immutable
+# immutable
+class SourceLineComment(SourceLine):
+	"""
+	A line without any code that is simply a comment to provide context to
+	humans.
+	"""
+	def __init__(self, comment: str):
+		"""
+		:param comment: An optional comment to include when outputting raw code to provide context to human readers.
+		"""
+		super(SourceLineComment, self).__init__('', comment=comment)
+
+# immutable
 class SourceLineLabel(SourceLine):
 	"""A line of assembly code containing a label definition."""
 	def __init__(self, label: str, comment: str = None):
@@ -134,7 +138,7 @@ class SourceLineLabel(SourceLine):
 		:param label: The label on this line.
 		:param comment: An optional comment to include when outputting raw code to provide context to human readers.
 		"""
-		super(SourceLine, self).__init__(label + ':', comment=comment)
+		super(SourceLineLabel, self).__init__(label + ':', comment=comment)
 
 	@property
 	def label(self):
@@ -229,7 +233,9 @@ class SourceCode(object):
 		text_lines = collections.deque()
 		for src_line in src_lines:
 			comment = '' if src_line.comment is None else '; ' + src_line.comment
-			if isinstance(src_line, SourceLineLabel):
+			if isinstance(src_line, SourceLineComment):
+				text_lines.append((comment, ''))
+			elif isinstance(src_line, SourceLineLabel):
 				text_lines.append((src_line.code, comment))
 			else:
 				text_lines.append(('  ' + src_line.code, comment))

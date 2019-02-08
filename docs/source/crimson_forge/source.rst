@@ -27,4 +27,6 @@ Classes
 
 .. autoclass:: SourceLine
 
+.. autoclass:: SourceLineComment
+
 .. autoclass:: SourceLineLabel

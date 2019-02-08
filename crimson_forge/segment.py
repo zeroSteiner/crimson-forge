@@ -284,8 +284,17 @@ class ExecutableSegment(base.Base):
 		})
 		return project
 
-	#def to_source(self):
-	#	source = "; base address: 0x{:04x}\n_start:\n".format(self.address)
-	#	for blk in self.blocks.values():
-	#		source += blk.to_source()
-	#	return source
+	def to_source(self):
+		src_code = source.SourceCode(self.arch)
+		src_code.extend([
+			source.SourceLineComment("base address: 0x{:04x}".format(self.address)),
+			source.SourceLineLabel('_start')
+		])
+		for blk in self.blocks.values():
+			if isinstance(blk, block.DataBlock):
+				src_code.extend(blk.source_iter(), blk)
+			elif isinstance(blk, block.BasicBlock):
+				src_code.extend(blk.instructions.values(), blk)
+			else:
+				raise TypeError('block type is not supported')
+		return src_code
