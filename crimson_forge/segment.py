@@ -287,6 +287,7 @@ class ExecutableSegment(base.Base):
 	def to_source(self):
 		src_code = source.SourceCode(self.arch)
 		src_code.extend([
+			source.SourceLineComment("arch: {}".format(self.arch.name.lower())),
 			source.SourceLineComment("base address: 0x{:04x}".format(self.address)),
 			source.SourceLineLabel('_start')
 		])
