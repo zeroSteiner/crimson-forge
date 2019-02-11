@@ -80,9 +80,10 @@ class IRJump(object):
 
 # hashable, immutable
 class IRRegister(object):
-	__slots__ = ('_arch', '_positions')
-	def __init__(self, arch, positions):
+	__slots__ = ('__weakref__', '_arch', '_name', '_positions')
+	def __init__(self, arch, positions, name=None):
 		self._arch = arch
+		self._name = name
 		self._positions = positions
 
 	def __and__(self, other):
@@ -110,15 +111,17 @@ class IRRegister(object):
 	def from_arch(cls, arch, name):
 		# todo: remove this dirty hack once https://github.com/angr/archinfo/pull/57 is landed
 		modifier = 0
+		original_name = None
 		if isinstance(arch, archinfo.ArchAMD64):
 			match = re.match(r'r\d+(?P<variant>[dwb])', name)
 			if match is not None:
 				modifier = {'d': -4, 'w': -6, 'b': -7}[match.group('variant')]
+				original_name = name
 				name = name[:-1]
 		offset, size = arch.registers[name]
 		size += modifier
 		offset *= arch.byte_width
-		return cls(arch, range(offset, offset + (size * arch.byte_width)))
+		return cls(arch, range(offset, offset + (size * arch.byte_width)), name=original_name)
 
 	@classmethod
 	def from_ir(cls, arch, offset, size=None):
@@ -159,6 +162,8 @@ class IRRegister(object):
 
 	@property
 	def name(self):
+		if self._name is not None:
+			return self._name
 		return self.arch.translate_register_name(self._positions.start // self.arch.byte_width, self.width // self.arch.byte_width)
 
 	@property

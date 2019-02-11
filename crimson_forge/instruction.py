@@ -41,6 +41,7 @@ import crimson_forge.ir as ir
 import crimson_forge.source as source
 
 import archinfo
+import keystone
 import pyvex
 
 logger = logging.getLogger('crimson-forge.instruction')
@@ -222,7 +223,12 @@ class Instruction(object):
 
 	@classmethod
 	def from_source(cls, text, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(source.remove_comments(text), base)
+		text = source.remove_comments(text)
+		try:
+			blob, _ = arch.keystone.asm(text, base)
+		except keystone.KsError as error:
+			logger.error("Keystone failed to assemble instruction: '{}' at: 0x{:04x}".format(text, base))
+			raise error
 		return cls.from_bytes(bytes(blob), arch, base=base)
 
 	@property
