@@ -220,6 +220,9 @@ def main(args=None, input_data=None, printer=None):
 	printer.print_status('Using analysis profile: ' + analysis_profile.value + (' (auto-detected)' if args.analysis_profile is None else ''))
 	if analysis_profile == AnalysisProfile.SHELLCODE:
 		crimson_forge.analysis.symexec_data_identification_ret(exec_seg)
+		tainted_self_refs = crimson_forge.analysis.symexec_tainted_self_reference_identification(exec_seg)
+		if tainted_self_refs:
+			printer.print_warning('Identified tainted self-references, can not rewrite instructions')
 
 	printer.print_status("Total blocks: {:,}".format(len(exec_seg.blocks)))
 	printer.print_status("    basic:    {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.BasicBlock))))

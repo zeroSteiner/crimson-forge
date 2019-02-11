@@ -45,12 +45,14 @@ import boltons.iterutils
 logger = logging.getLogger('crimson-forge.analysis')
 
 class SelfReferenceTracker(angr.SimStatePlugin):
+	name = 'self_references'
 	stack_drift = 16  # +/- 16 entries from the stack pointer (natively-sized)
 	# the reference is made of three addresses
 	#    * instruction: the address of the instruction which made the reference
 	#    * stack: the address on the stack where the reference was placed
 	#    * referenced: the address that is referenced
 	Reference = collections.namedtuple('Reference', ('instruction', 'stack', 'referenced'))
+	ReferenceExpression = collections.namedtuple('ExpressionReference', ('expression', 'reference', 'tainted'))
 	def __init__(self, blocks, copied=False):
 		super(SelfReferenceTracker, self).__init__()
 		self.blocks = blocks
@@ -58,37 +60,27 @@ class SelfReferenceTracker(angr.SimStatePlugin):
 		self.breakpoints = {}
 		# these are references that exist on the stack
 		self.references = {}
-		self.taint = {}
+		self.expressions = {}
 
-	def _breakpoint(self, state, event_type):
-		with self.disabled():
-			if event_type == 'reg_write':
-				self._breakpoint_reg_write(state)
-			elif event_type == 'mem_read':
-				self._breakpoint_mem_read(state)
-			elif event_type == 'mem_write':
-				self._breakpoint_mem_write(state)
-
-	def _breakpoint_reg_write(self, state):
-		arch = state.arch
-		if logger.isEnabledFor(logging.DEBUG):
-			ip_addr = state.solver.eval(state.regs.ip)
-			reg = ir.IRRegister.from_ir(arch, state.inspect.reg_write_offset * arch.byte_width, size=state.solver.eval(state.inspect.reg_write_length) * arch.byte_width)
-			logger.debug("[0x{:04x}] reg-write: (expr) {!r} -> {}".format(ip_addr, state.inspect.reg_write_expr, reg.name))
-		reg_write_offset = state.inspect.reg_write_offset
-		if isinstance(reg_write_offset, claripy.ast.BV):
-			if not reg_write_offset.concrete:
-				return
-			reg_write_offset = state.solver.eval(reg_write_offset)
-		reg = ir.IRRegister.from_ir(
-			arch,
-			reg_write_offset * arch.byte_width,
-			size=state.solver.eval(state.inspect.reg_write_length) * arch.byte_width
-		)
-		if not (reg & ir.IRRegister.from_arch(state.arch, 'ip')):
+	@classmethod
+	def _breakpoint(cls, state, event_type):
+		instance = getattr(state, cls.name)
+		handler = getattr(instance, '_breakpoint_' + event_type, None)
+		if handler is None:
+			logger.info("Hit breakpoint for event: %s with no handler", event_type)
 			return
-		if any(symbol.variables & state.inspect.reg_write_expr.variables for symbol in self.taint.keys()):
-			pass  # self reference identified
+		with instance.disabled():
+			handler(state)
+
+	def _breakpoint_expr(self, state):
+		expr = state.inspect.expr
+		if not expr.symbolic:
+			return
+		if expr in self.expressions:
+			return
+		if any(symbol.variables & expr.variables for symbol in self.expressions.keys()):
+			self.expressions[expr] = self.ReferenceExpression(expr, None, True)
+			logger.info('New tainted expression identified')
 
 	def _breakpoint_mem_read(self, state):
 		if not state.regs.ip.concrete:
@@ -99,17 +91,17 @@ class SelfReferenceTracker(angr.SimStatePlugin):
 		stack_addr = state.solver.eval(state.regs.sp)
 		if state.inspect.mem_read_address.concrete:
 			read_addr = state.solver.eval(state.inspect.mem_read_address)
-			logger.debug("[0x{:04x}] mem-read: (expr) {!r} @0x{:04x}".format(ip_addr, state.inspect.mem_read_expr, read_addr))
+			logger.debug("[0x%04x] mem-read: (expr) %r @0x%04x", ip_addr, state.inspect.mem_read_expr, read_addr)
 		if not self.__addr_is_on_stack(state, stack_addr, state.inspect.mem_read_address):
 			return
 		reference = self.references.get(read_addr)
 		if reference is None:
 			return
-		logger.info("Tainted reference accessed by 0x%04x", ip_addr)
+		logger.info("[0x%04x] Tainted reference accessed", ip_addr)
 		mem_read_expr = state.solver.BVS("self-reference @0x{:x}".format(reference.stack), state.inspect.mem_read_expr.length)
 		state.add_constraints(mem_read_expr == state.inspect.mem_read_expr)
 		state.inspect.mem_read_expr = mem_read_expr
-		self.taint[mem_read_expr] = reference
+		self.expressions[mem_read_expr] = self.ReferenceExpression(mem_read_expr, reference, False)
 
 	def __addr_is_on_stack(self, state, stack_addr, address):
 		if not address.concrete:
@@ -155,9 +147,9 @@ class SelfReferenceTracker(angr.SimStatePlugin):
 		stack_addr = state.solver.eval(state.regs.sp)
 		if self.__breakpoint_mem_write(state, stack_addr, ip_addr):
 			self.references[stack_addr] = self.Reference(ip_addr, stack_addr, state.solver.eval(state.inspect.mem_write_expr))
-			logger.info("Marking stack address 0x%04x as IP tainted by 0x%04x", stack_addr, ip_addr)
+			logger.info("[0x%04x] Marking stack address 0x%04x as IP tainted", ip_addr, stack_addr)
 		elif stack_addr in self.references:
-			logger.info("Unmarking stack address 0x%04x as IP tainted by 0x%04x", stack_addr, ip_addr)
+			logger.info("[0x%04x] Unmarking stack address 0x%04x as IP tainted", ip_addr, stack_addr)
 			del self.references[stack_addr]
 
 	def _make_breakpoint(self, event_type, when=angr.BP_AFTER):
@@ -169,7 +161,7 @@ class SelfReferenceTracker(angr.SimStatePlugin):
 		new = self.__class__(self.blocks, copied=True)
 		new.breakpoints = self.breakpoints
 		new.references = self.references.copy()
-		new.taint = self.taint.copy()
+		new.expressions = self.expressions.copy()
 		return new
 
 	@contextlib.contextmanager
@@ -180,11 +172,14 @@ class SelfReferenceTracker(angr.SimStatePlugin):
 		for event_type, bp in self.breakpoints.items():
 			self.state.inspect.add_breakpoint(event_type, bp=bp)
 
+	def register(self, state):
+		state.register_plugin(self.name, self)
+
 	def init_state(self, *args, **kwargs):
 		super(SelfReferenceTracker, self).init_state(*args, **kwargs)
 		if not self.breakpoints:
 			# https://github.com/angr/angr-doc/blob/master/docs/simulation.md#breakpoints
-			self._make_breakpoint('reg_write', when=angr.BP_BEFORE)
+			self._make_breakpoint('expr')
 			self._make_breakpoint('mem_read')
 			self._make_breakpoint('mem_write')
 
@@ -260,24 +255,25 @@ def symexec_data_identification_ret(exec_seg):
 			blk.bytes += next_blk.bytes
 			del exec_seg.blocks[next_blk.address]
 
-def symexec_selfref_identification(exec_seg):
+def symexec_tainted_self_reference_identification(exec_seg):
 	project = exec_seg.to_angr()
 	state = project.factory.blank_state()
 	state.regs.ip = exec_seg.entry_address
 	# todo: populate the tracker with an initial entry when it makes sense to start from a call-state
-	state.register_plugin('self_references', SelfReferenceTracker(exec_seg.blocks))
+	SelfReferenceTracker(exec_seg.blocks).register(state)
 
 	def _simulate_state_recursively(state, history):
 		target_address = state.solver.eval(state.regs.ip)
 		blk = exec_seg.blocks.get(target_address)
 		if blk is None:
 			# todo: this should probably do something more intelligent, we're losing track here if this occurs
-			logger.warning('Encountered address that does not correlate to a block')
-			return False
+			raise RuntimeError('Encountered address that does not correlate to a block')
 		simgr = project.factory.simulation_manager(state)
 		simgr.step(num_inst=len(blk.instructions))
 		result = True
 		for new_state in simgr.active:
+			if any(ref_expr.tainted for ref_expr in new_state.self_references.expressions.values()):
+				return False
 			if not new_state.regs.ip.concrete:
 				continue
 			history_entry = (target_address, new_state.solver.eval(new_state.regs.ip))
@@ -287,4 +283,4 @@ def symexec_selfref_identification(exec_seg):
 			result = result and _simulate_state_recursively(new_state, history)
 			history.pop()
 		return result
-	return _simulate_state_recursively(state, collections.deque())
+	return not _simulate_state_recursively(state, collections.deque())
