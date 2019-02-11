@@ -97,7 +97,7 @@ def register_postprocessor(*architectures, byte_mask=None, mnemonic=None):
 _InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
 # hashable
 class Instruction(object):
-	_regex_jmp = re.compile(r'^(?P<jump>(call|j[\S]{1,4}|loop(n?e)?))\s+0x(?P<location>[a-f0-9]+)(\s+;(?P<comment>.*))?$')
+	_regex_jmp = re.compile(r'^(?P<jump>(call|j[\S]{1,4}|loop(n?e)?))\s+0x(?P<location>[a-f0-9]+)' + source.REGEX_INSTRUCTION_END)
 	def __init__(self, arch, cs_ins, vex_statements, ir_tyenv):
 		self.arch = arch
 		self.cs_instruction = cs_ins

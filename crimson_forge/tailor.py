@@ -41,6 +41,7 @@ import struct
 
 import crimson_forge.ir as ir
 import crimson_forge.instruction as instruction
+import crimson_forge.source as source
 
 import archinfo
 import boltons.iterutils
@@ -152,7 +153,9 @@ amd64 = archinfo.ArchAMD64()
 x86 = archinfo.ArchX86()
 
 def _re_match(regex, ins):
-	regex += r'(\s+;.*)?$'
+	# this will automatically append source.REGEX_INSTRUCTION_END to terminate the
+	# instruction, ensuring that *regex* is the entire instruction
+	regex += source.REGEX_INSTRUCTION_END
 	return re.match(regex, ins.source, flags=re.IGNORECASE)
 
 @register_alteration()
@@ -162,7 +165,7 @@ class PushValue(AlterationBase):
 	def run(self, block, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
-			match = re.match(r'^push (?P<value>\S+)', ins.source)
+			match = _re_match(r'^push (?P<value>\S+)', ins)
 			if match is None:
 				continue
 			if not is_numeric(match.group('value')):
@@ -180,7 +183,7 @@ class PopValue(AlterationBase):
 	def run(self, block, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
-			match = re.match(r'^pop (?P<value>\S+)', ins.source)
+			match = _re_match(r'^pop (?P<value>\S+)', ins)
 			if match is None:
 				continue
 			if stk_ptr & ir.IRRegister.from_arch(self.arch, match.group('value')):
@@ -197,7 +200,7 @@ class MoveConstant(AlterationBase):
 	def run(self, block, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
-			match = re.match(r'^mov (?P<register>\S+), 0x(?P<value>[a-f0-9]+)', ins.source)
+			match = _re_match(r'^mov (?P<register>\S+), 0x(?P<value>[a-f0-9]+)', ins)
 			if match is None:
 				continue
 			reg = ir.IRRegister.from_arch(self.arch, match.group('register'))

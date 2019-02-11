@@ -38,6 +38,8 @@ import archinfo
 
 logger = logging.getLogger('crimson-forge.source')
 
+REGEX_INSTRUCTION_END = r'(\s+;(?P<comment>.*))?$'
+
 def remove_comments(text: str, comment_char: str = ';') -> str:
 	"""
 	Remove comments from the provided assembly source text.
