@@ -204,9 +204,11 @@ class BasicBlock(BlockBase):
 		all_permutations = path_permutations(constraints)
 		return len(all_permutations)
 
-	def permutation_instructions(self):
-		#constraints = self.to_digraph()
-		constraints = tailor.alter(self)
+	def permutation_instructions(self, replacements=True):
+		if replacements:
+			constraints = tailor.alter(self)
+		else:
+			constraints = self.to_digraph()
 
 		instructions = collections.deque()
 		# the initial choices are any node without a predecessor (dependency)

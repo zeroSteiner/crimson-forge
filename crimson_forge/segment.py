@@ -245,11 +245,23 @@ class ExecutableSegment(base.Base):
 		blob = self.permutation_bytes()
 		return self.__class__(blob, self.arch, self.base)
 
-	def permutation_bytes(self):
-		src_code = self.permutation_source()
-		exec_seg_src = str(src_code)
-		exec_seg_src = source.remove_comments(exec_seg_src)
-		return bytes(self.arch.keystone.asm(exec_seg_src, self.address)[0])
+	def permutation_bytes(self, replacements=True):
+		blob = b''
+		if replacements:
+			# if replacing instructions, operate at the source level to use labels
+			src_code = self.permutation_source(replacements=True)
+			exec_seg_src = str(src_code)
+			exec_seg_src = source.remove_comments(exec_seg_src)
+			blob = bytes(self.arch.keystone.asm(exec_seg_src, self.address)[0])
+		else:
+			# if not replacing instructions, use the original instruction bytes
+			for blk in self.blocks.values():
+				if isinstance(blk, block.DataBlock):
+					blob += blk.bytes
+				elif isinstance(blk, block.BasicBlock):
+					for instruction in blk.permutation_instructions(replacements=False):
+						blob += instruction.bytes
+		return blob
 
 	def permutation_count(self):
 		count = 1
@@ -259,13 +271,13 @@ class ExecutableSegment(base.Base):
 			count *= blk.permutation_count()
 		return count
 
-	def permutation_source(self):
+	def permutation_source(self, replacements=True):
 		src_code = source.SourceCode(self.arch)
 		for blk in self.blocks.values():
 			if isinstance(blk, block.DataBlock):
 				src_code.extend(blk.source_iter(), blk)
 			elif isinstance(blk, block.BasicBlock):
-				src_code.extend(blk.permutation_instructions(), blk)
+				src_code.extend(blk.permutation_instructions(replacements=replacements), blk)
 			else:
 				raise TypeError('block type is not supported')
 		return src_code
