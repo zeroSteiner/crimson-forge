@@ -58,6 +58,7 @@ BANNER = """
  / __|| '__|| || '_ ` _ \ / __| / _ \ | '_ \   | |_  / _ \ | '__|/ _` | / _ \\
 | (__ | |   | || | | | | |\__ \| (_) || | | |  |  _|| (_) || |  | (_| ||  __/
  \___||_|   |_||_| |_| |_||___/ \___/ |_| |_|  |_|   \___/ |_|   \__, | \___|
+                                                                 |___/
 """
 
 HELP_EPILOG = """\
@@ -243,7 +244,7 @@ def main(args=None, input_data=None, printer=None):
 			output_data = exec_seg.permutation_bytes(replacements=replacements)
 		else:
 			output_data = exec_seg.bytes
-		if input_data_length is not None and input_data_length != len(output_data):
+		if not replacements and input_data_length is not None and input_data_length != len(output_data):
 			printer.print_error("Raw output length: {} (incorrect, input length: {})".format(boltons.strutils.bytes2human(len(output_data)), boltons.strutils.bytes2human(input_data_length)))
 			printer.print_status('Analyzing block sizes...')
 			crimson_forge.analysis.check_block_sizes(exec_seg)
