@@ -30,7 +30,7 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 from .block import BasicBlock, DataBlock
 from .instruction import Instruction
