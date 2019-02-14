@@ -45,7 +45,7 @@ import angr
 import capstone
 import graphviz
 
-logger = logging.getLogger('crimson-forge.binary')
+logger = logging.getLogger('crimson-forge.segment')
 
 def _irsb_jumps(irsb):
 	jumps = collections.deque()

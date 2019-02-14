@@ -3,6 +3,8 @@ DEBUG
 --output-format
 pe:exe
 --output-format
+pe:exe:svc
+--output-format
 raw
 --output-format
 source

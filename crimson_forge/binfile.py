@@ -30,8 +30,15 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import logging
+import os
+
 import archinfo
 import lief
+
+logger = logging.getLogger('crimson-forge.binfile')
+
+template_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'templates'))
 
 def _build_pe(pe_binary, shellcode):
 	section_text = lief.PE.Section('.text')
@@ -76,3 +83,25 @@ def build_pe_exe_for_shellcode(arch, shellcode):
 	else:
 		raise ValueError('unsupported architecture: ' + repr(arch))
 	return _build_pe(pe_binary, shellcode)
+
+def patch_pe_with_shellcode(arch, shellcode, template, *args, **kwargs):
+	return patch_template_with_shellcode(arch, shellcode, template, '.exe', *args, **kwargs)
+
+def patch_template_with_shellcode(arch, shellcode, template, extension, extra=None):
+	patch_points = {'SHELLCODE:': shellcode}
+	if extra:
+		patch_points.update(extra)
+	template_path = os.path.join(template_directory, template + '.' + arch.name.lower() + extension)
+	if not os.path.isfile(template_path):
+		raise RuntimeError('missing template file: ' + template_path)
+	logger.info('Loading template file: ' + template_path)
+	with open(template_path, 'rb') as file_h:
+		data = file_h.read()
+	for point, content in patch_points.items():
+		if not isinstance(point, bytes):
+			point = point.encode('ascii')
+		if not isinstance(content, bytes):
+			content = content.encode('ascii')
+		offset = data.index(point)
+		data = data[:offset] + content + data[offset + len(content):]
+	return data

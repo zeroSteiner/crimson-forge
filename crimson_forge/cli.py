@@ -70,6 +70,7 @@ analysis profile choices:
 
 data format choices:
   pe:exe           a portable executable
+  pe:exe:svc       a portable executable (service variant)
   raw              raw executable code
   source           assembly source code
 """
@@ -88,6 +89,7 @@ class DataFormat(enum.Enum):
 		obj.extension = extension
 		return obj
 	PE_EXE = _DataFormatSpec('pe:exe', 'exe')
+	PE_EXE_SVC = _DataFormatSpec('pe:exe:svc', 'svc.exe')
 	RAW = _DataFormatSpec('raw', 'bin')
 	SOURCE = _DataFormatSpec('source', 'asm')
 
@@ -117,11 +119,20 @@ def _handle_output(args, printer, arch, data):
 	if DataFormat.PE_EXE in args.output_format:
 		if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
 			pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
-			printer.print_status('PE output hash (SHA-256): ' + hash(pe_data))
+			printer.print_status('pe:exe output hash (SHA-256): ' + hash(pe_data))
 			with _handle_output_file(args, arch, DataFormat.PE_EXE) as file_h:
 				file_h.write(pe_data)
 		else:
-			printer.print_error('Unsupported architecture for PE output: ' + arch.name)
+			printer.print_error('Unsupported architecture for pe:exe output: ' + arch.name)
+
+	if DataFormat.PE_EXE_SVC in args.output_format:
+		if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
+			pe_data = crimson_forge.binfile.patch_pe_with_shellcode(arch, data, 'template-service', {'SERVICE_NAME:': 'Crimson Forge'})
+			printer.print_status('pe:exe:svc output hash (SHA-256): ' + hash(pe_data))
+			with _handle_output_file(args, arch, DataFormat.PE_EXE_SVC) as file_h:
+				file_h.write(pe_data)
+		else:
+			printer.print_error('Unsupported architecture for pe:exe:svc output: ' + arch.name)
 
 	if DataFormat.RAW in args.output_format:
 		with _handle_output_file(args, arch, DataFormat.RAW) as file_h:

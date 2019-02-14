@@ -64,11 +64,20 @@ metadata = {
 	'name': 'Crimson Forge',
 	'description': '''
 		Use Crimson Forge to process a payload from the Metasploit Framework.
+		Set EXE_TYPE to EXE:SVC to generate a service-compatible executable file
+		for use with psexec.
 	 ''',
 	'authors': ['Spencer McIntyre'],
 	'license': 'MSF_LICENSE',
 	'type': 'evasion',
 	'options': {
+		'EXE_TYPE': {
+			'type': 'enum',
+			'description': 'The type of executable to generate',
+			'required': True,
+			'default': 'EXE',
+			'values': ['EXE', 'EXE:SVC'],
+		},
 		'LOG_LEVEL': {
 			'advanced': True,
 			'type': 'enum',
@@ -101,7 +110,7 @@ def run(msf_options):
 	target = targets[msf_options['target']]
 	cli_args = target['options'].copy()
 	cli_args.extend(['--format', 'raw'])
-	cli_args.extend(['--output-format', 'pe:exe'])
+	cli_args.extend(['--output-format', 'pe:' + msf_options['EXE_TYPE'].lower()])
 	cli_args.extend(['--skip-banner'])
 	cli_args.append(msf_options['FILENAME'])
 	input_data = binascii.a2b_base64(msf_options['payload_raw'])
