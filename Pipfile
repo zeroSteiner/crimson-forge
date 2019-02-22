@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 archinfo = "*"
 capstone = "*"
-keystone-engine = "*"
+keystone-engine = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/keystone-engine-0.9.1.post3.zip"}
 networkx = "*"
 pyvex = "*"
 graphviz = "*"
