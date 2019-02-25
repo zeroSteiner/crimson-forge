@@ -1,8 +1,18 @@
 # Crimson Forge Installation
 
-*Crimson Forge has only been tested on Fedora 29*
+## Supported Operating Systems
 
-1. Install `cmake`, `pipenv` and `git` as necessary
+* Fedora 29
+* Kali 2019.1
+
+## Installation Instructions
+
+1. Install prerequisites
+    * Python v3.6+
+    * Additional OS packages
+        * `cmake`
+        * `git`
+        * `pipenv`
 1. Clone the repository
     * `git clone git@github.com:securestate/crimson-forge.git`
 1. Change directories into the repository

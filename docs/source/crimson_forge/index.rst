@@ -6,3 +6,4 @@
    :titlesonly:
 
    source.rst
+   utilities.rst

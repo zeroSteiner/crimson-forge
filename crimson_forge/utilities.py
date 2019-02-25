@@ -49,6 +49,7 @@ print_colors = True
 def print_error(message):
 	"""
 	Print an error message to the console.
+
 	:param str message: The message to print
 	"""
 	prefix = '[-] '
@@ -59,6 +60,7 @@ def print_error(message):
 def print_good(message):
 	"""
 	Print a good message to the console.
+
 	:param str message: The message to print
 	"""
 	prefix = '[+] '
@@ -69,6 +71,7 @@ def print_good(message):
 def print_status(message):
 	"""
 	Print a status message to the console.
+
 	:param str message: The message to print
 	"""
 	prefix = '[*] '
@@ -79,6 +82,7 @@ def print_status(message):
 def print_warning(message):
 	"""
 	Print a warning message to the console.
+
 	:param str message: The message to print
 	"""
 	prefix = '[!] '
