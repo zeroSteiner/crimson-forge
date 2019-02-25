@@ -78,6 +78,11 @@ class _Blocks(collections.OrderedDict):
 				return blk
 		return None
 
+	def get_next(self, blk):
+		if not isinstance(blk, block.BlockBase):
+			raise TypeError('argument 1 must be a BlockBase instance')
+		return self.get(blk.address + blk.size)
+
 	def to_graphviz(self):
 		graph = graphviz.Digraph()
 		for blk in self.values():

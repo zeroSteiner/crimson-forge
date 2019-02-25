@@ -39,7 +39,6 @@ import crimson_forge.block as block
 import crimson_forge.ir as ir
 
 import angr
-import claripy.ast
 import boltons.iterutils
 
 logger = logging.getLogger('crimson-forge.analysis')
@@ -218,8 +217,10 @@ def symexec_data_identification_cfg(exec_seg):
 			exec_seg.blocks[node.addr] = dblock
 
 def symexec_data_identification_ret(exec_seg):
-	# This analysis identifies basic-blocks with a single parent ending in a call jump and tries to confirm that they
-	# do in fact return.
+	"""
+	This analysis identifies basic-blocks with a single parent ending in a call
+	jump and tries to confirm that they do in fact return.
+	"""
 	project = exec_seg.to_angr()
 	for blk in tuple(exec_seg.blocks.values()):
 		if blk.address not in exec_seg.blocks:
@@ -250,10 +251,20 @@ def symexec_data_identification_ret(exec_seg):
 		logger.info("Converting basic-block at 0x%04x to a data-block", blk.address)
 		blk = blk.to_data_block()
 		exec_seg.blocks[blk.address] = blk
-		next_blk = exec_seg.blocks.get(blk.address + blk.size)
-		if isinstance(next_blk, block.DataBlock):
-			blk.bytes += next_blk.bytes
-			del exec_seg.blocks[next_blk.address]
+		next_blk = exec_seg.blocks.get_next(blk)
+		while next_blk:
+			# creat a cascading affect of basic to data block conversions
+			if isinstance(next_blk, block.BasicBlock) and not next_blk.parents:
+				logger.debug("Converting basic-block at 0x%04x to a data-block (via cascading)", next_blk.address)
+				next_blk = next_blk.to_data_block()
+			if isinstance(next_blk, block.DataBlock):
+				logger.debug("Absorbing data-block at 0x%04x into data-block at 0x%04x (via cascading)", next_blk.address, blk.address)
+				blk.bytes += next_blk.bytes
+				if next_blk.address in exec_seg.blocks:
+					del exec_seg.blocks[next_blk.address]
+			else:
+				break
+			next_blk = exec_seg.blocks.get_next(next_blk)
 
 def symexec_tainted_self_reference_identification(exec_seg):
 	project = exec_seg.to_angr()
