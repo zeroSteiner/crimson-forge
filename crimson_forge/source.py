@@ -99,7 +99,7 @@ class Reference(object):
 	def value(self):
 		return self._value
 
-# mmutable
+# immutable
 class SourceLine(object):
 	"""A instruction and line of assembly source code."""
 	__slots__ = ('__weakref__', '_code', '_comment')
@@ -213,6 +213,7 @@ class SourceCode(object):
 
 	def __str__(self):
 		src_lines = self._lines.copy()
+		placed_labels = set()
 		for jmp_reference, label in self._labels.items():
 			src_line = None
 			if jmp_reference.type == ReferenceType.ADDRESS:
@@ -228,8 +229,19 @@ class SourceCode(object):
 				raise TypeError('unknown jump reference type')
 			if src_line is None:
 				logger.error('Have no known position for reference label: ' + label)
-			else:
-				src_lines.insert(src_lines.index(src_line), SourceLineLabel(label))
+				continue
+			position = src_lines.index(src_line)
+			if position > 1:
+				prev_src_line = src_lines[position - 1]
+				if isinstance(prev_src_line, SourceLineLabel) and prev_src_line.label == label:
+					# skip duplicate labels which have resolved to the same location
+					continue
+			elif label in placed_labels:
+				message = "Source label '{}' has been redefined".format(label)
+				logger.error(message)
+				raise RuntimeError(message)
+			src_lines.insert(src_lines.index(src_line), SourceLineLabel(label))
+			placed_labels.add(label)
 
 		text_lines = collections.deque()
 		for src_line in src_lines:

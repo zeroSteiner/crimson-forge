@@ -44,6 +44,7 @@ import crimson_forge.ssa as ssa
 import angr
 import capstone
 import graphviz
+import keystone
 
 logger = logging.getLogger('crimson-forge.segment')
 
@@ -257,7 +258,10 @@ class ExecutableSegment(base.Base):
 			src_code = self.permutation_source(replacements=True)
 			exec_seg_src = str(src_code)
 			exec_seg_src = source.remove_comments(exec_seg_src)
-			blob = bytes(self.arch.keystone.asm(exec_seg_src, self.address)[0])
+			try:
+				blob = bytes(self.arch.keystone.asm(exec_seg_src, self.address)[0])
+			except keystone.KsError as error:
+				logger.error('Failed to assemble source, error: ' + error.message)
 		else:
 			# if not replacing instructions, use the original instruction bytes
 			for blk in self.blocks.values():
