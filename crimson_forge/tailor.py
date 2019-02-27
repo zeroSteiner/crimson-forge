@@ -50,6 +50,35 @@ logger = logging.getLogger('crimson-forge.tailor')
 
 _SIZES = {64: 'qword', 32: 'dword', 16: 'word', 8: 'byte'}
 
+class SelectorLinear(object):
+	def __init__(self, rate):
+		if rate == 0 or rate == 1:
+			rate = float(rate)
+		if not isinstance(rate, float):
+			raise TypeError('rate must be a float between 0.0 and 1.0')
+		if rate <= 0.0 or rate >= 1.0:
+			raise TypeError('rate must be a float between 0.0 and 1.0')
+		self.rate = rate
+
+	def select(self):
+		return random.random() < self.rate
+
+class SelectorExponentialGrowth(SelectorLinear):
+	def __init__(self, *args, **kwargs):
+		super(SelectorExponentialGrowth, self).__init__(*args, **kwargs)
+		self.base_rate = self.rate
+		self.streak = 0
+
+	def select(self):
+		selected = super(SelectorExponentialGrowth, self).select()
+		if selected:
+			self.streak = 0
+			self.rate = self.base_rate
+		else:
+			self.streak += 1
+			self.rate += 1 - (1 - self.base_rate) ** (self.streak + 1)
+		return selected
+
 def is_numeric(string):
 	return re.match(r'^(0x[a-f0-9]+|[0-9]+)$', string, flags=re.IGNORECASE) is not None
 
@@ -67,14 +96,15 @@ def register_alteration():
 		return wrapper
 	return decorator
 
-def alter(block, modifier=1.0, iterations=1):
+def alter(block, rate=0.5, iterations=1):
 	arch = block.arch
 	graph = block.to_digraph()
 	if arch.name not in alterations:
 		raise NotImplementedError('No alterations implemented for arch: ' + arch.name)
+	selector = SelectorExponentialGrowth(rate)
 	while iterations > 0:
 		for alteration in alterations[arch.name]:
-			if random.random() > modifier:
+			if not selector.select():
 				continue
 			graph = alteration(block, graph) or graph
 		iterations -= 1
@@ -89,6 +119,7 @@ class AlterationBase(object):
 	architectures = ()
 	modifies_size = True
 	name = 'unknown'
+	required = False
 	_regex_relative = re.compile('\s(?P<offset>\$[+-](0x[a-f0-9]+|[0-9]+))(?=\s|;|$)')
 	def __init__(self, arch):
 		self.arch = arch
@@ -218,6 +249,7 @@ class MoveConstant(AlterationBase):
 class ReplaceJCXZ(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'replace_jcxz'
+	required = True
 	def run(self, block, graph):
 		ins = tuple(graph.nodes)[-1]
 		match = _re_match(r'^(?P<jump>j[er]?cxz) 0x(?P<value>[a-f0-9]+)', ins)

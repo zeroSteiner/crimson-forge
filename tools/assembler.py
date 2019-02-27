@@ -39,7 +39,6 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import crimson_forge
 import crimson_forge.cli as cli
 import crimson_forge.source as source
-import crimson_forge.utilities as utilities
 
 import keystone
 
