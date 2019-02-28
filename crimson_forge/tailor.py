@@ -101,7 +101,7 @@ def alter(block, rate=0.5, iterations=1):
 	graph = block.to_digraph()
 	if arch.name not in alterations:
 		raise NotImplementedError('No alterations implemented for arch: ' + arch.name)
-	selector = SelectorExponentialGrowth(rate)
+	selector = SelectorLinear(rate)
 	while iterations > 0:
 		for alteration in alterations[arch.name]:
 			if not selector.select():

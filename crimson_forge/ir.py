@@ -41,16 +41,36 @@ OPT_LEVEL_NO_OPTIMIZATION = 0
 
 # https://github.com/angr/pyvex/blob/master/pyvex/lifting/util/vex_helper.py
 class JumpKind(pyvex.lifting.util.JumpKind):
+	"""
+	A class containing the various jump kinds that can be encountered in the IR.
+	"""
 	MapFail = 'Ijk_MapFail'
 
 	@classmethod
 	def returns(cls, value):
+		"""
+		Whether or not the jump kind *value* returns the flow of execution.
+
+		:param str value: The jump kind to check.
+		:return: Whether or not the jump kind returns the flow of execution.
+		:rtype: bool
+		"""
 		return value in (cls.Call, cls.Syscall, cls.Sysenter)
 
 # hashable, immutable
 class IRJump(object):
+	"""
+	An object representing an IR jump and it's associated metadata.
+	"""
 	__slots__ = ('_arch', '_from_address', '_to_address', '_kind')
 	def __init__(self, arch, to_address, from_address, kind=JumpKind.Boring):
+		"""
+		:param arch: The architecture of the jump.
+		:type arch: :py:class:`archinfo.Arch`
+		:param int to_address: The jump's destination address.
+		:param int from_address: The jump's source address.
+		:param str kind: The kind of jump, corresponding to a :py:class:`.JumpKind` attribute.
+		"""
 		self._arch = arch
 		self._to_address = to_address
 		self._from_address = from_address
@@ -80,8 +100,15 @@ class IRJump(object):
 
 # hashable, immutable
 class IRRegister(object):
+	"""An object representing an IR register and it's associated metadata."""
 	__slots__ = ('__weakref__', '_arch', '_name', '_positions')
 	def __init__(self, arch, positions, name=None):
+		"""
+		:param arch: The architecture of the register.
+		:type arch: :py:class:`archinfo.Arch`
+		:param range positions: The bit positions occupied by the register.
+		:param str name: An optional explicit name for the register.
+		"""
 		self._arch = arch
 		self._name = name
 		self._positions = positions
@@ -105,11 +132,18 @@ class IRRegister(object):
 
 	@property
 	def arch(self):
+		""":type arch: :py:class:`archinfo.Arch`"""
 		return self._arch
 
 	@classmethod
 	def from_arch(cls, arch, name):
-		# todo: remove this dirty hack once https://github.com/angr/archinfo/pull/57 is landed
+		"""
+		:param arch: The architecture of the register.
+		:type arch: :py:class:`archinfo.Arch`
+		:param str name: The name of the register to create for the architecture.
+		:rtype: :py:class:`.IRRegister`
+		"""
+		# todo: remove this dirty hack once https://github.com/angr/archinfo/pull/57 is landed and released
 		modifier = 0
 		original_name = None
 		if isinstance(arch, archinfo.ArchAMD64):
@@ -125,6 +159,13 @@ class IRRegister(object):
 
 	@classmethod
 	def from_ir(cls, arch, offset, size=None):
+		"""
+		:param arch: The architecture of the register.
+		:type arch: :py:class:`archinfo.Arch`
+		:param int offset: The offset in bits of the register within the IR.
+		:param int size: The number of bits the register occupies, e.g. x86's ``eax`` register would be 32-bits.
+		:rtype: :py:class:`.IRRegister`
+		"""
 		if size is None:
 			size = arch.bits
 		return cls(arch, range(offset, offset + size))
@@ -158,16 +199,31 @@ class IRRegister(object):
 		return cls.from_ir(arch, offset, size=size)
 
 	def in_iterable(self, iterable):
+		"""
+		Whether this register overlaps with any register in *iterable*.
+
+		:param iterable: The iterable to check the contents of.
+		:return: Whether or not this register overlaps with any register in *iterable*.
+		:rtype: bool
+		"""
 		return any(self & other_reg for other_reg in iterable)
 
 	@property
 	def name(self):
+		"""
+		:return: The name of this register.
+		:rtype: str
+		"""
 		if self._name is not None:
 			return self._name
 		return self.arch.translate_register_name(self._positions.start // self.arch.byte_width, self.width // self.arch.byte_width)
 
 	@property
 	def width(self):
+		"""
+		:return: The width in bits of this register.
+		:rtype: int
+		"""
 		return len(self._positions)
 
 def lift(blob, base, arch):
