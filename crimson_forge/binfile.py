@@ -40,7 +40,8 @@ logger = logging.getLogger('crimson-forge.binfile')
 
 template_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'templates'))
 
-def _build_pe(pe_binary, shellcode):
+def _build_pe(pe_binary, shellcode, certificate_table=b''):
+	# build and add the .text section
 	section_text = lief.PE.Section('.text')
 	section_text.characteristics = 0x60000020
 	section_text.content = shellcode
@@ -48,6 +49,7 @@ def _build_pe(pe_binary, shellcode):
 	pe_binary.add_section(section_text)
 	pe_binary.optional_header.addressof_entrypoint = section_text.virtual_address
 
+	# add imports
 	# todo: these imports should be user-configurable but default to sane profiles of legitimate functionality (i.e. file operations)
 	kernel32 = pe_binary.add_library('kernel32.dll')
 	kernel32.add_entry('CloseHandle')
@@ -55,10 +57,18 @@ def _build_pe(pe_binary, shellcode):
 	user32 = pe_binary.add_library('user32.dll')
 	user32.add_entry('MessageBoxA')
 
+	# optionally add the certificate table
+	if certificate_table:
+		data_directory = pe_binary.data_directories[lief.PE.DATA_DIRECTORY.CERTIFICATE_TABLE]
+		last_section = tuple(pe_binary.sections)[-1]
+		data_directory.rva = last_section.offset + last_section.size
+		data_directory.size = len(certificate_table)
+
+	# build the pe file
 	builder = lief.PE.Builder(pe_binary)
 	builder.build_imports(True)
 	builder.build()
-	return bytes(builder.get_build())
+	return bytes(builder.get_build()) + certificate_table
 
 def build_pe_dll_for_shellcode(arch, shellcode):
 	if isinstance(arch, archinfo.ArchX86):
