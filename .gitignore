@@ -9,6 +9,7 @@
 .python-version
 Pipfile.lock
 build/*
+data/*.local.*
 data/templates/*/.vs/*
 data/templates/*/Debug
 data/templates/*/Release

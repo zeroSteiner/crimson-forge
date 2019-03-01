@@ -89,6 +89,7 @@ class DataFormat(enum.Enum):
 		obj.extension = extension
 		return obj
 	PE_EXE = _DataFormatSpec('pe:exe', 'exe')
+	#PE_EXE_DLL = _DataFormatSpec('pe:exe:dll', 'dll')
 	PE_EXE_SVC = _DataFormatSpec('pe:exe:svc', 'svc.exe')
 	RAW = _DataFormatSpec('raw', 'bin')
 	SOURCE = _DataFormatSpec('source', 'asm')

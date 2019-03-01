@@ -32,6 +32,9 @@
 
 import logging
 import os
+import random
+
+import crimson_forge.catalog
 
 import archinfo
 import lief
@@ -46,7 +49,7 @@ def __build_pe(pe_binary, build_imports=True):
 	builder.build()
 	return bytes(builder.get_build())
 
-def _build_pe(pe_binary, shellcode, certificate_table=b''):
+def _build_pe(pe_binary, shellcode):
 	# build and add the .text section
 	section_text = lief.PE.Section('.text')
 	section_text.characteristics = 0x6000_0020
@@ -73,12 +76,23 @@ def _build_pe(pe_binary, shellcode, certificate_table=b''):
 		logger.warning('The .l1 section was not found in the generated PE data')
 
 	# optionally add the certificate table
-	last_section = tuple(pe_binary.sections)[-1]
+	certificate_table = _get_random_signature() or b''
 	if certificate_table:
+		last_section = tuple(pe_binary.sections)[-1]
 		data_directory = pe_binary.data_directories[lief.PE.DATA_DIRECTORY.CERTIFICATE_TABLE]
 		data_directory.rva = last_section.offset + last_section.size
 		data_directory.size = len(certificate_table)
 	return __build_pe(pe_binary, build_imports=False) + certificate_table
+
+def _get_random_signature():
+	binaries = crimson_forge.catalog.get_entry_group('binaries', required_keys=('authenticode-signature',))
+	if not binaries:
+		return
+	choice = random.choice(binaries)
+	signature = choice['authenticode-signature']
+	issuer = signature.get('issuer', {})
+	logger.info('Using randomly selected signature from: %s (%s)', choice['file-name'], issuer.get('organization-name', ''))
+	return signature['data']
 
 def build_pe_dll_for_shellcode(arch, shellcode):
 	if isinstance(arch, archinfo.ArchX86):
