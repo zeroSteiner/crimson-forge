@@ -94,6 +94,20 @@ class DataFormat(enum.Enum):
 	RAW = _DataFormatSpec('raw', 'bin')
 	SOURCE = _DataFormatSpec('source', 'asm')
 
+	@classmethod
+	def guess(cls, path):
+		formats = sorted(cls, key=lambda format: len(format.extension), reverse=True)
+		for format in formats:
+			if path.endswith('.' + format.extension):
+				break
+		else:
+			format = cls.RAW
+		if format.extension.endswith('exe'):
+			with open(path, 'rb') as file_h:
+				if file_h.read(2) != b'MZ':
+					format = cls.RAW
+		return format
+
 @enum.unique
 class AnalysisProfile(enum.Enum):
 	SHELLCODE = 'shellcode'

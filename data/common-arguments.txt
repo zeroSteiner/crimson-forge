@@ -8,4 +8,3 @@ pe:exe:svc
 raw
 --output-format
 source
---skip-permutation
