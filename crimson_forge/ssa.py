@@ -46,8 +46,17 @@ VARIABLE_REGISTERS = {
 
 # hashable, immutable
 class Variable(object):
+	"""
+	An object representing a single, statically assigned variable and the
+	relevant metadata.
+	"""
 	__slots__ = ('__defined_at', '__register')
 	def __init__(self, defined_at, register):
+		"""
+		:param int defined_at: The address at which the variable is defined.
+		:param register: The register which stores the contents of this variable.
+		:type register: :py:class:`crimson_forge.ir.IRRegister`
+		"""
 		self.__defined_at = defined_at
 		self.__register = register
 
@@ -59,14 +68,31 @@ class Variable(object):
 
 	@property
 	def name(self):
+		"""
+		:return: A string representing this variable's name.
+		:rtype: str
+		"""
 		return "var_{}_{:04x}".format(self.__register.name, self.__defined_at)
 
 	@property
 	def register(self):
+		"""
+		:return: The register which stores the contents of this variable.
+		:rtype: :py:class:`crimson_forge.ir.IRRegister`
+		"""
 		return self.__register
 
 class Variables(collections.abc.Collection):
+	"""
+	An iterable of all of the single statically assigned variables identified in
+	the specified *instructions*. Each identified variable is described by a
+	:py:class:`~.Variable` instance.
+	"""
 	def __init__(self, instructions):
+		"""
+		:param instructions: The instructions to analyze.
+		:type instructions: :py:class:`crimson_forge.base.InstructionsProxy`
+		"""
 		self._storage = []
 		arch = instructions.arch
 		if arch.name not in VARIABLE_REGISTERS:

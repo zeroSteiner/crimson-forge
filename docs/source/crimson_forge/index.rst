@@ -7,4 +7,5 @@
 
    ir.rst
    source.rst
+   ssa.rst
    utilities.rst

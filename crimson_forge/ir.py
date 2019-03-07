@@ -132,7 +132,10 @@ class IRRegister(object):
 
 	@property
 	def arch(self):
-		""":type arch: :py:class:`archinfo.Arch`"""
+		"""
+		:return: The architecture of this register.
+		:rtype: :py:class:`archinfo.Arch`
+		"""
 		return self._arch
 
 	@classmethod
