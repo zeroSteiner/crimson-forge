@@ -40,7 +40,15 @@ import crimson_forge.instruction as instruction
 import tabulate
 
 class InstructionsProxy(collections.abc.Mapping):
+	"""
+	A mapping of addresses to :py:class:`~.instruction.Instruction` instances.
+	"""
 	def __init__(self, arch, cs_instructions):
+		"""
+		:param arch: The architecture of the instructions.
+		:type arch: :py:class:`archinfo.Arch`
+		:param tuple cs_instructions: The iterable of Capstone instructions to map.
+		"""
 		self.arch = arch
 		self.cs_instructions = cs_instructions
 
@@ -66,12 +74,30 @@ class InstructionsProxy(collections.abc.Mapping):
 		raise NotImplementedError()
 
 	def for_address(self, address):
+		"""
+		Obtain the instruction which exists at *address*. This method does not
+		require *address* to be the start of the instruction, like using the
+		get item interface does. If no instruction is found at the specified
+		*address*, ``None`` is returned.
+
+		:param int address: The address to obtain the instruction for.
+		:return: The instruction located at the specified address.
+		:rtype: :py:class:`crimson_forge.instruction.Instruction`
+		"""
 		for ins in self.cs_instructions.values():
 			if ins.address <= address <= (ins.address + ins.size - 1):
 				return self.__getitem__(ins.address)
 		return None
 
 	def pp_asm(self, stream='stdout'):
+		"""
+		Pretty-print the disassembly of the instructions to the specified
+		*stream*. This method is intended for debugging purposes.
+
+		:param str stream: The stream to write to. If stream is ``None``, no output is displayed.
+		:return: The formatted output that was optionally written to *stream*.
+		:rtype: str
+		"""
 		table = [("0x{:04x}".format(ins.address), ins.bytes_hex, ins.source) for ins in self.values()]
 		formatted = tabulate.tabulate(table, disable_numparse=True, tablefmt='plain')
 		if stream is not None:
@@ -81,10 +107,17 @@ class InstructionsProxy(collections.abc.Mapping):
 		return formatted
 
 	def pp_ir(self):
+		"""
+		Pretty-print the intermediary representation (IR) of the instructions.
+		This method is intended for debugging purposes.
+		"""
 		for ins in self.values():
 			ins.pp_ir()
 
 class Base(object):
+	"""
+	A base class for representing some the binary data of some instructions.
+	"""
 	def __init__(self, blob, arch, address):
 		self.bytes = blob
 		self.arch = arch
