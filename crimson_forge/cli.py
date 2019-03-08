@@ -110,8 +110,8 @@ class DataFormat(enum.Enum):
 
 @enum.unique
 class AnalysisProfile(enum.Enum):
-	SHELLCODE = 'shellcode'
 	EXECUTABLE_FILE = 'executable-file'
+	SHELLCODE = 'shellcode'
 
 def argtype_data_format(value):
 	try:

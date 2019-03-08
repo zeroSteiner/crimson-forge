@@ -47,8 +47,7 @@ def _access_file(path, mode):
 
 bullet_formatting = {
 	'align': 2,
-	'margin': 1,
-	'pad_right': 20,
+	'margin': 1
 }
 
 class CustomYesNo(bullet.YesNo):
@@ -61,11 +60,9 @@ class CustomYesNo(bullet.YesNo):
 		while True:
 			ans = my_input.input()
 			if ans == "":
-				return True if ans.lower() == 'y' else False
-			if not self.valid(ans):
-				continue
-			else:
-				return True if ans.lower() == 'y' else False
+				return default == 'y'
+			if self.valid(ans):
+				return ans.lower() == 'y'
 
 def _prompt(prompt):
 	return termcolor.colored('[?] ', 'cyan', attrs=['bold']) + prompt + ' '
@@ -76,6 +73,7 @@ def _bullet(prompt, choices, default=None):
 		default = choices.index(default)
 	else:
 		default = None
+	choices = tuple("{!s: <20}".format(choice) for choice in choices)
 	selected = bullet.Bullet(
 		_prompt(prompt),
 		choices=choices,
@@ -86,12 +84,13 @@ def _bullet(prompt, choices, default=None):
 		word_on_switch=bullet.colors.foreground['white'],
 		**bullet_formatting
 	).launch(default=default)
-	return selected
+	return selected.rstrip()
 
 def _bullet_check(prompt, choices, default=None):
 	choices = tuple(choices)
 	if default is not None:
 		default = [choices.index(value) for value in default if value in choices]
+	choices = tuple("{!s: <20}".format(choice) for choice in choices)
 	selected = bullet.Check(
 		_prompt(prompt),
 		choices=choices,
@@ -103,6 +102,7 @@ def _bullet_check(prompt, choices, default=None):
 		word_on_switch=bullet.colors.foreground['white'],
 		**bullet_formatting
 	).launch(default=default)
+	selected = tuple(member.rstrip() for member in selected)
 	return selected
 
 def _bullet_input(prompt):
