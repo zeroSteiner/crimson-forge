@@ -32,9 +32,6 @@
 
 import logging
 import os
-import random
-
-import crimson_forge.catalog
 
 import archinfo
 import lief
@@ -74,25 +71,26 @@ def _build_pe(pe_binary, shellcode):
 		section_l1.characteristics = 0x4000_0040
 	else:
 		logger.warning('The .l1 section was not found in the generated PE data')
+	return __build_pe(pe_binary, build_imports=False)
 
-	# optionally add the certificate table
-	certificate_table = _get_random_signature() or b''
-	if certificate_table:
-		last_section = tuple(pe_binary.sections)[-1]
-		data_directory = pe_binary.data_directories[lief.PE.DATA_DIRECTORY.CERTIFICATE_TABLE]
-		data_directory.rva = last_section.offset + last_section.size
-		data_directory.size = len(certificate_table)
-	return __build_pe(pe_binary, build_imports=False) + certificate_table
-
-def _get_random_signature():
-	binaries = crimson_forge.catalog.get_entry_group('binaries', required_keys=('authenticode-signature',))
-	if not binaries:
-		return
-	choice = random.choice(binaries)
-	signature = choice['authenticode-signature']
-	issuer = signature.get('issuer', {})
-	logger.info('Using randomly selected signature from: %s (%s)', choice['file-name'], issuer.get('organization-name', ''))
-	return signature['data']
+def _patch_template_with_shellcode(arch, shellcode, template, extension, extra=None):
+	patch_points = {'SHELLCODE:': shellcode}
+	if extra:
+		patch_points.update(extra)
+	template_path = os.path.join(template_directory, template + '.' + arch.name.lower() + extension)
+	if not os.path.isfile(template_path):
+		raise RuntimeError('missing template file: ' + template_path)
+	logger.info('Loading template file: ' + template_path)
+	with open(template_path, 'rb') as file_h:
+		data = file_h.read()
+	for point, content in patch_points.items():
+		if not isinstance(point, bytes):
+			point = point.encode('ascii')
+		if not isinstance(content, bytes):
+			content = content.encode('ascii')
+		offset = data.index(point)
+		data = data[:offset] + content + data[offset + len(content):]
+	return data
 
 def build_pe_dll_for_shellcode(arch, shellcode):
 	if isinstance(arch, archinfo.ArchX86):
@@ -119,23 +117,12 @@ def build_pe_exe_for_shellcode(arch, shellcode):
 	return _build_pe(pe_binary, shellcode)
 
 def patch_pe_with_shellcode(arch, shellcode, template, *args, **kwargs):
-	return patch_template_with_shellcode(arch, shellcode, template, '.exe', *args, **kwargs)
+	return _patch_template_with_shellcode(arch, shellcode, template, '.exe', *args, **kwargs)
 
-def patch_template_with_shellcode(arch, shellcode, template, extension, extra=None):
-	patch_points = {'SHELLCODE:': shellcode}
-	if extra:
-		patch_points.update(extra)
-	template_path = os.path.join(template_directory, template + '.' + arch.name.lower() + extension)
-	if not os.path.isfile(template_path):
-		raise RuntimeError('missing template file: ' + template_path)
-	logger.info('Loading template file: ' + template_path)
-	with open(template_path, 'rb') as file_h:
-		data = file_h.read()
-	for point, content in patch_points.items():
-		if not isinstance(point, bytes):
-			point = point.encode('ascii')
-		if not isinstance(content, bytes):
-			content = content.encode('ascii')
-		offset = data.index(point)
-		data = data[:offset] + content + data[offset + len(content):]
-	return data
+def patch_pe_signature(pe_data, signature_data):
+	pe_binary = lief.parse(list(pe_data))
+	last_section = tuple(pe_binary.sections)[-1]
+	data_directory = pe_binary.data_directories[lief.PE.DATA_DIRECTORY.CERTIFICATE_TABLE]
+	data_directory.rva = last_section.offset + last_section.size
+	data_directory.size = len(signature_data)
+	return __build_pe(pe_binary, build_imports=False) + signature_data

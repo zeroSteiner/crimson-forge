@@ -45,6 +45,7 @@ import random
 import crimson_forge
 import crimson_forge.analysis
 import crimson_forge.binfile
+import crimson_forge.catalog
 import crimson_forge.utilities
 
 import archinfo
@@ -79,6 +80,7 @@ architectures = {
 	'amd64': archinfo.ArchAMD64(),
 	'x86': archinfo.ArchX86(),
 }
+logger = logging.getLogger('crimson-forge.cli')
 
 _DataFormatSpec = collections.namedtuple('_DataFormatSpec', ('value', 'extension'))
 @enum.unique
@@ -130,30 +132,50 @@ def argtype_analysis_profile(value):
 def hash(data, algorithm='sha256'):
 	return hashlib.new(algorithm, data).hexdigest()
 
+def _get_random_pe_signature():
+	binaries = crimson_forge.catalog.get_entry_group('binaries', required_keys=('authenticode-signature',))
+	if not binaries:
+		return
+	choice = random.choice(binaries)
+	signature = choice['authenticode-signature']
+	issuer = signature.get('issuer', {})
+	logger.info('Using randomly selected signature from: %s (%s)', choice['file-name'], issuer.get('organization-name', ''))
+	return signature['data']
+
 def _handle_output(args, printer, arch, data):
-	if DataFormat.PE_EXE in args.output_format:
+	pe_signature = None
+	if any(output_format.value.startswith('pe:') for output_format in args.output_formats) and args.pe_forge_signature:
+		pe_signature = _get_random_pe_signature()
+		if pe_signature is None:
+			logger.warning('Failed to select a random PE file signature')
+
+	if DataFormat.PE_EXE in args.output_formats:
 		if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
 			pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
+			if pe_signature:
+				pe_data = crimson_forge.binfile.patch_pe_signature(pe_data, pe_signature)
 			printer.print_status('pe:exe output hash (SHA-256): ' + hash(pe_data))
 			with _handle_output_file(args, arch, DataFormat.PE_EXE) as file_h:
 				file_h.write(pe_data)
 		else:
 			printer.print_error('Unsupported architecture for pe:exe output: ' + arch.name)
 
-	if DataFormat.PE_EXE_SVC in args.output_format:
+	if DataFormat.PE_EXE_SVC in args.output_formats:
 		if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
 			pe_data = crimson_forge.binfile.patch_pe_with_shellcode(arch, data, 'template-service', {'SERVICE_NAME:': 'Crimson Forge'})
+			if pe_signature:
+				pe_data = crimson_forge.binfile.patch_pe_signature(pe_data, pe_signature)
 			printer.print_status('pe:exe:svc output hash (SHA-256): ' + hash(pe_data))
 			with _handle_output_file(args, arch, DataFormat.PE_EXE_SVC) as file_h:
 				file_h.write(pe_data)
 		else:
 			printer.print_error('Unsupported architecture for pe:exe:svc output: ' + arch.name)
 
-	if DataFormat.RAW in args.output_format:
+	if DataFormat.RAW in args.output_formats:
 		with _handle_output_file(args, arch, DataFormat.RAW) as file_h:
 			file_h.write(data)
 
-	if DataFormat.SOURCE in args.output_format:
+	if DataFormat.SOURCE in args.output_formats:
 		o_exec_seg = crimson_forge.segment.ExecutableSegment(data, arch)
 		text = str(o_exec_seg.to_source())
 		with _handle_output_file(args, arch, DataFormat.SOURCE) as file_h:
@@ -162,7 +184,7 @@ def _handle_output(args, printer, arch, data):
 @contextlib.contextmanager
 def _handle_output_file(args, arch, format):
 	output_path = args.output
-	if len(args.output_format) > 1:
+	if len(args.output_formats) > 1:
 		# if the user specified multiple output formats set the extension for them, otherwise leave it
 		output_path += ".{}.{}".format(arch.name.lower(), format.extension)
 	with open(output_path, 'wb') as file_h:
@@ -201,8 +223,10 @@ def main(args=None, input_data=None, printer=None):
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format (see: data format choices)')
 	parser.add_argument('-v', '--version', action='version', version='%(prog)s Version: ' + crimson_forge.__version__)
 	parser.add_argument('--analysis-profile', dest='analysis_profile', default=None, metavar='PROFILE', type=argtype_analysis_profile, help='the analysis profile to use (see: analysis profile choices)')
-	parser.add_argument('--output-format', dest='output_format', default=[DataFormat.RAW], action=AppendOverrideDefaultAction, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
+	parser.add_argument('--output-format', dest='output_formats', default=[DataFormat.RAW], action=AppendOverrideDefaultAction, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
+
+	parser.add_argument('--pe-forge-signature', dest='pe_forge_signature', default=False, action='store_true', help='add a forged signature to the pe file')
 
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('--skip-banner', dest='show_banner', default=True, action='store_false', help='skip printing the banner')
