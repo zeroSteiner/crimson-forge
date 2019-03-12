@@ -86,19 +86,17 @@ alterations = collections.defaultdict(list)
 def register_alteration():
 	def decorator(Alteration):
 		@functools.wraps(Alteration.run)
-		def wrapper(block, graph):
-			arch = block.arch
-			logger.info("Using %s alteration: %s", arch.name, Alteration.name)
-			alteration = Alteration(arch)
-			return alteration.run(block, graph)
+		def wrapper(graph):
+			logger.info("Using %s alteration: %s", graph.arch.name, Alteration.name)
+			alteration = Alteration(graph.arch)
+			return alteration.run(graph)
 		for arch in Alteration.architectures:
 			alterations[arch.name].append(wrapper)
 		return wrapper
 	return decorator
 
-def alter(block, rate=0.5, iterations=1):
-	arch = block.arch
-	graph = block.to_digraph()
+def alter(graph, rate=0.5, iterations=1):
+	arch = graph.arch
 	if arch.name not in alterations:
 		raise NotImplementedError('No alterations implemented for arch: ' + arch.name)
 	selector = SelectorLinear(rate)
@@ -106,7 +104,7 @@ def alter(block, rate=0.5, iterations=1):
 		for alteration in alterations[arch.name]:
 			if not selector.select():
 				continue
-			graph = alteration(block, graph) or graph
+			graph = alteration(graph) or graph
 		iterations -= 1
 	return graph
 
@@ -193,7 +191,7 @@ def _re_match(regex, ins):
 class PushValue(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'push_value'
-	def run(self, block, graph):
+	def run(self, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
 			match = _re_match(r'^push (?P<value>\S+)', ins)
@@ -211,7 +209,7 @@ class PushValue(AlterationBase):
 class PopValue(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'pop_value'
-	def run(self, block, graph):
+	def run(self, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
 			match = _re_match(r'^pop (?P<value>\S+)', ins)
@@ -228,7 +226,7 @@ class PopValue(AlterationBase):
 class MoveConstant(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'move_constant'
-	def run(self, block, graph):
+	def run(self, graph):
 		stk_ptr = ir.IRRegister.from_arch(self.arch, 'sp')
 		for ins in tuple(graph.nodes):
 			match = _re_match(r'^mov (?P<register>\S+), 0x(?P<value>[a-f0-9]+)', ins)
@@ -246,11 +244,11 @@ class MoveConstant(AlterationBase):
 			))
 
 @register_alteration()
-class ReplaceJCXZ(AlterationBase):
+class PatchJCXZ(AlterationBase):
 	architectures = (amd64, x86)
-	name = 'replace_jcxz'
+	name = 'patch_jcxz'
 	required = True
-	def run(self, block, graph):
+	def run(self, graph):
 		ins = tuple(graph.nodes)[-1]
 		match = _re_match(r'^(?P<jump>j[er]?cxz) 0x(?P<value>[a-f0-9]+)', ins)
 		if match is None:
@@ -265,4 +263,4 @@ class ReplaceJCXZ(AlterationBase):
 			instruction.Instruction.from_bytes(new_opcode, self.arch, base=ins.address)
 		))
 		ins_1.jmp_reference = instruction.Reference(instruction.ReferenceType.INSTRUCTION, ins_3)
-		ins_2.jmp_reference = instruction.Reference(instruction.ReferenceType.BLOCK, block.children[block.next_address])
+		ins_2.jmp_reference = instruction.Reference(instruction.ReferenceType.BLOCK_ADDRESS, ins.next_address)

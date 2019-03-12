@@ -40,7 +40,6 @@ import crimson_forge.base as base
 import crimson_forge.ir as ir
 import crimson_forge.source as source
 import crimson_forge.ssa as ssa
-import crimson_forge.tailor as tailor
 
 import boltons.iterutils
 import graphviz
@@ -121,6 +120,98 @@ class DataBlock(BlockBase):
 				comment="+0x{:>04x}  ".format(row * chunk_size) + ascii_col
 			)
 
+class InstructionsDiGraph(networkx.DiGraph):
+	def __init__(self, instructions, *args, **kwargs):
+		"""
+		:param instructions: The instructions to include in this graph.
+		"""
+		super(InstructionsDiGraph, self).__init__(*args, **kwargs)
+		self._instructions = instructions
+		t_instructions = tuple(self._instructions.values())
+
+		self.add_nodes_from(t_instructions)
+		ins_ptr = ir.IRRegister.from_arch(self.arch, 'ip')
+
+		constraints = collections.defaultdict(collections.deque)
+		for idx, ins in enumerate(t_instructions):
+			for reg in (ins.registers.accessed | ins.registers.stored):
+				# for each accessed register, we search backwards to find when it was set
+				for pos in reversed(range(0, idx)):
+					o_ins = t_instructions[pos]
+					if reg == ins_ptr:
+						# if the instruction pointer is accessed or stored then this instruction is positionally
+						# dependant, so mark all proceeding instructions as dependants so the position is correct
+						constraints[ins].append(o_ins)
+					elif o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
+						constraints[ins].append(o_ins)
+						break
+
+				for pos in range(idx + 1, len(t_instructions)):
+					o_ins = t_instructions[pos]
+					if reg == ins_ptr:
+						constraints[o_ins].append(ins)
+					elif o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
+						constraints[o_ins].append(ins)
+						break
+
+		parent_nodes = set(itertools.chain(*constraints.values()))
+		leaf_nodes = set(ins for ins in self._instructions.values() if ins not in parent_nodes)
+
+		exit_node = next((ins for ins in leaf_nodes if ins_ptr in ins.registers.modified), None)
+		if exit_node is not None:
+			leaf_nodes.remove(exit_node)
+			for leaf_node in leaf_nodes:
+				constraints[self._exit_for_leaf(leaf_node, exit_node)].append(leaf_node)
+
+		for child, dependencies in constraints.items():
+			for parent in dependencies:
+				self.add_edge(parent, child)
+
+	def _exit_for_leaf(self, leaf_node, exit_node):
+		t_instructions = tuple(self._instructions.values())
+		if t_instructions[-1] != exit_node:
+			# this basic-block is corrupted, the instructions continue past an
+			# explicit modification to the instruction pointer such as a call or
+			# jump
+			raise ValueError('the exit node was not identified as the last instruction')
+		for ins in reversed(t_instructions):
+			if ins == leaf_node:
+				break
+			if not any(reg.in_iterable(ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
+				return ins
+		return exit_node
+
+	@property
+	def arch(self):
+		return self._instructions.arch
+
+	def to_graphviz(self):
+		g_graph = graphviz.Digraph()
+		for node in self.nodes:
+			g_graph.node("0x{0:04x}".format(node.address), "0x{0:04x} {1}".format(node.address, node.source))
+		for parent, child in self.edges:
+			g_graph.edge("0x{0:04x}".format(parent.address), "0x{0:04x}".format(child.address), constraint='true')
+		return g_graph
+
+	def to_instructions(self):
+		instructions = collections.deque()
+		# the initial choices are any node without a predecessor (dependency)
+		choices = set(node for node in self.nodes if len(tuple(self.predecessors(node))) == 0)
+		while choices:  # continue to make selections while we have choices
+			selection = random.choice(tuple(choices))  # make a selection
+			choices.remove(selection)
+			instructions.append(selection)
+			# analyze the nodes which are successors (dependants) of the selection
+			for successor in self.successors(selection):
+				# skip the node if it's already been added
+				if successor in instructions:
+					continue
+				# or if all of it's predecessors (dependencies) have not been met
+				if not all(predecessor in instructions for predecessor in self.predecessors(successor)):
+					continue
+				choices.add(successor)
+		return instructions
+
 class BasicBlock(BlockBase):
 	def __init__(self, blob, arch, address, cs_instructions, vex_instructions, ir_tyenv, ir_jumpkind):
 		super(BasicBlock, self).__init__(blob, arch, address)
@@ -134,20 +225,6 @@ class BasicBlock(BlockBase):
 
 	def __repr__(self):
 		return "<{} arch: {}, at: 0x{:04x}, size: {}, jump: {} >".format(self.__class__.__name__, self.arch.name, self.address, self.size, self.ir_jumpkind)
-
-	def _exit_for_leaf(self, leaf_node, exit_node):
-		t_instructions = tuple(self.instructions.values())
-		if t_instructions[-1] != exit_node:
-			# this basic-block is corrupted, the instructions continue past an
-			# explicit modification to the instruction pointer such as a call or
-			# jump
-			raise ValueError('the exit node was not identified as the last instruction')
-		for ins in reversed(t_instructions):
-			if ins == leaf_node:
-				break
-			if not any(reg.in_iterable(ins.registers.accessed | ins.registers.stored) for reg in leaf_node.registers.modified):
-				return ins
-		return exit_node
 
 	def _split_new(self, addresses, ir_jumpkind):
 		cls = self.__class__
@@ -204,30 +281,6 @@ class BasicBlock(BlockBase):
 		all_permutations = path_permutations(constraints)
 		return len(all_permutations)
 
-	def permutation_instructions(self, replacements=True):
-		if replacements:
-			constraints = tailor.alter(self)
-		else:
-			constraints = self.to_digraph()
-
-		instructions = collections.deque()
-		# the initial choices are any node without a predecessor (dependency)
-		choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
-		while choices:  # continue to make selections while we have choices
-			selection = random.choice(tuple(choices))  # make a selection
-			choices.remove(selection)
-			instructions.append(selection)
-			# analyze the nodes which are successors (dependants) of the selection
-			for successor in constraints.successors(selection):
-				# skip the node if it's already been added
-				if successor in instructions:
-					continue
-				# or if all of it's predecessors (dependencies) have not been met
-				if not all(predecessor in instructions for predecessor in constraints.predecessors(successor)):
-					continue
-				choices.add(successor)
-		return instructions
-
 	def split(self, address):
 		# split this block at the specified address (which can not be the first address) into two,
 		# this instance takes on the attributes of the lower block which maintains it's address while
@@ -271,56 +324,5 @@ class BasicBlock(BlockBase):
 		return DataBlock(self.bytes, self.arch, self.address)
 
 	def to_digraph(self):
-		t_instructions = tuple(self.instructions.values())
-		graph = networkx.DiGraph()
-		graph.add_nodes_from(t_instructions)
-		ins_ptr = ir.IRRegister.from_arch(self.arch, 'ip')
-
-		constraints = collections.defaultdict(collections.deque)
-		for idx, ins in enumerate(t_instructions):
-			for reg in (ins.registers.accessed | ins.registers.stored):
-				# for each accessed register, we search backwards to find when it was set
-				for pos in reversed(range(0, idx)):
-					o_ins = t_instructions[pos]
-					if reg == ins_ptr:
-						# if the instruction pointer is accessed or stored then this instruction is positionally
-						# dependant, so mark all proceeding instructions as dependants so the position is correct
-						constraints[ins].append(o_ins)
-					elif o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
-						constraints[ins].append(o_ins)
-						break
-
-				for pos in range(idx + 1, len(t_instructions)):
-					o_ins = t_instructions[pos]
-					if reg == ins_ptr:
-						constraints[o_ins].append(ins)
-					elif o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
-						constraints[o_ins].append(ins)
-						break
-
-		parent_nodes = set(itertools.chain(*constraints.values()))
-		leaf_nodes = set(ins for ins in self.instructions.values() if ins not in parent_nodes)
-
-		exit_node = next((ins for ins in leaf_nodes if ins_ptr in ins.registers.modified), None)
-		if exit_node is not None:
-			leaf_nodes.remove(exit_node)
-			for leaf_node in leaf_nodes:
-				constraints[self._exit_for_leaf(leaf_node, exit_node)].append(leaf_node)
-
-		for child, dependencies in constraints.items():
-			for parent in dependencies:
-				graph.add_edge(parent, child)
+		graph = InstructionsDiGraph(self.instructions)
 		return graph
-
-	def to_graphviz(self):
-		n_graph = self.to_digraph()
-		g_graph = graphviz.Digraph()
-		for node in n_graph.nodes:
-			g_graph.node("0x{0:04x}".format(node.address), "0x{0:04x} {1}".format(node.address, node.source))
-		for parent, child in n_graph.edges:
-			g_graph.edge(
-				"0x{0:04x}".format(parent.address),
-				"0x{0:04x}".format(child.address),
-				constraint='true'
-			)
-		return g_graph
