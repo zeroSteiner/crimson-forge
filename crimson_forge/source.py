@@ -69,7 +69,7 @@ def label_maker(location: int, prefix: str = 'loc', scope: str = '') -> str:
 class ReferenceType(enum.Enum):
 	"""The type of the reference."""
 	ADDRESS = 'address'              # the value is an absolute address, go there
-	"""A specific address (relative to the location of the referring instruciton)."""
+	"""A specific address (relative to the location of the referring instruction)."""
 	BLOCK = 'block'                  # the value is a block, go to it's first instruction
 	"""A specific block. Resolution will evaluate to the first instruction of the block."""
 	BLOCK_ADDRESS = 'block-address'  # the value is an address, go to the first instruction of the block it's in

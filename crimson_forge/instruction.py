@@ -250,6 +250,10 @@ class Instruction(object):
 			logger.warning('Overwriting non-default jump reference')
 		self._jmp_reference = value
 
+	@property
+	def next_address(self):
+		return self.address + self.size
+
 	def pp_asm(self, stream='stdout'):
 		formatted = "0x{:04x}  {} {}".format(self.address, self.bytes_hex, self.source)
 		if stream is not None:
@@ -279,6 +283,10 @@ class Instruction(object):
 				stream = getattr(sys, stream.lower())
 			print(formatted, file=stream)
 		return formatted
+
+	@property
+	def size(self):
+		return len(self.bytes)
 
 	@property
 	def source(self):
