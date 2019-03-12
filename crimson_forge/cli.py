@@ -139,7 +139,11 @@ def _get_random_pe_signature():
 	choice = random.choice(binaries)
 	signature = choice['authenticode-signature']
 	issuer = signature.get('issuer', {})
-	logger.info('Using randomly selected signature from: %s (%s)', choice['file-name'], issuer.get('organization-name', ''))
+	logger.info(
+		'Using randomly selected signature from: %s (issuer: %s)',
+		choice.get('friendly-name', choice['file-name']),
+		issuer.get('organization-name', 'Unknown')
+	)
 	return signature['data']
 
 def _handle_output(args, printer, arch, data):
