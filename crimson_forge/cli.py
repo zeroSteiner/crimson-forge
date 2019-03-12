@@ -203,6 +203,7 @@ def main(args=None, input_data=None, printer=None):
 	parser.add_argument('--analysis-profile', dest='analysis_profile', default=None, metavar='PROFILE', type=argtype_analysis_profile, help='the analysis profile to use (see: analysis profile choices)')
 	parser.add_argument('--output-format', dest='output_format', default=[DataFormat.RAW], action=AppendOverrideDefaultAction, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
+
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('--skip-banner', dest='show_banner', default=True, action='store_false', help='skip printing the banner')
 	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
