@@ -292,13 +292,15 @@ class ExecutableSegment(base.Base):
 
 	def permutation_source(self, replacements=True):
 		src_code = source.SourceCode(self.arch)
+		alterations = tailor.AlterationsEngine(self.arch)
+		alterations.selector.seed(len(self.instructions))
 		for blk in self.blocks.values():
 			if isinstance(blk, block.DataBlock):
 				src_code.extend(blk.source_iter(), blk)
 			elif isinstance(blk, block.BasicBlock):
 				graph = blk.to_digraph()
 				if replacements:
-					graph = tailor.alter(graph)
+					graph = alterations.apply(graph)
 				src_code.extend(graph.to_instructions(), blk)
 			else:
 				raise TypeError('block type is not supported')

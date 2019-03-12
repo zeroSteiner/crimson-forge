@@ -60,6 +60,10 @@ class SelectorLinear(object):
 			raise TypeError('rate must be a float between 0.0 and 1.0')
 		self.rate = rate
 
+	def seed(self, iterations):
+		for iteration in range(iterations):
+			self.select()
+
 	def select(self):
 		return random.random() < self.rate
 
@@ -79,8 +83,13 @@ class SelectorExponentialGrowth(SelectorLinear):
 			self.rate += 1 - (1 - self.base_rate) ** (self.streak + 1)
 		return selected
 
-def is_numeric(string):
+def _is_numeric(string):
 	return re.match(r'^(0x[a-f0-9]+|[0-9]+)$', string, flags=re.IGNORECASE) is not None
+
+def _resub_relative_address(match, address=0):
+	value = ast.literal_eval(match.group('offset')[1:])
+	value += address
+	return " 0x{:x}".format(value)
 
 alterations = collections.defaultdict(list)
 def register_alteration():
@@ -95,23 +104,19 @@ def register_alteration():
 		return wrapper
 	return decorator
 
-def alter(graph, rate=0.5, iterations=1):
-	arch = graph.arch
-	if arch.name not in alterations:
-		raise NotImplementedError('No alterations implemented for arch: ' + arch.name)
-	selector = SelectorLinear(rate)
-	while iterations > 0:
-		for alteration in alterations[arch.name]:
-			if not selector.select():
+class AlterationsEngine(object):
+	def __init__(self, arch, rate=0.5):
+		if arch.name not in alterations:
+			raise NotImplementedError('No alterations implemented for arch: ' + arch.name)
+		self.arch = arch
+		self.selector = SelectorLinear(rate)
+
+	def apply(self, graph):
+		for alteration in alterations[self.arch.name]:
+			if not self.selector.select():
 				continue
 			graph = alteration(graph) or graph
-		iterations -= 1
-	return graph
-
-def _resub_relative_address(match, address=0):
-	value = ast.literal_eval(match.group('offset')[1:])
-	value += address
-	return " 0x{:x}".format(value)
+		return graph
 
 class AlterationBase(object):
 	architectures = ()
@@ -197,7 +202,7 @@ class PushValue(AlterationBase):
 			match = _re_match(r'^push (?P<value>\S+)', ins)
 			if match is None:
 				continue
-			if not is_numeric(match.group('value')):
+			if not _is_numeric(match.group('value')):
 				if stk_ptr & ir.IRRegister.from_arch(self.arch, match.group('value')):
 					continue
 			self.inject_instructions(graph, ins, (
