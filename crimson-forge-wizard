@@ -50,20 +50,6 @@ bullet_formatting = {
 	'margin': 1
 }
 
-class CustomYesNo(bullet.YesNo):
-	def launch(self, default='y'):
-		default = default.lower()
-		if not (default == 'y' or default == 'n'):
-			raise ValueError("`default` can only be 'y' or 'n'!")
-		my_input = bullet.client.myInput(word_color=self.word_color)
-		bullet.utils.forceWrite(' ' * self.indent + self.prompt)
-		while True:
-			ans = my_input.input()
-			if ans == "":
-				return default == 'y'
-			if self.valid(ans):
-				return ans.lower() == 'y'
-
 def _prompt(prompt):
 	return termcolor.colored('[?] ', 'cyan', attrs=['bold']) + prompt + ' '
 
@@ -135,7 +121,7 @@ def _bullet_yes_no(prompt, default='yes'):
 		prompt += ' [y/N]'
 	else:
 		raise ValueError('default must be either \'yes\' or \'no\'')
-	return CustomYesNo(_prompt(prompt + ':')).launch(default=default[0])
+	return bullet.YesNo(_prompt(prompt + ':'), prompt_prefix='').launch(default=default[0])
 
 def _get_analysis_profile():
 	choices = ['automatic']
