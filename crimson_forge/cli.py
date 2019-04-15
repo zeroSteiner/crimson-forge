@@ -46,6 +46,7 @@ import crimson_forge
 import crimson_forge.analysis
 import crimson_forge.binfile
 import crimson_forge.catalog
+import crimson_forge.errors
 import crimson_forge.utilities
 
 import archinfo
@@ -277,10 +278,17 @@ def main(args=None, input_data=None, printer=None):
 	replacements = True
 	if analysis_profile == AnalysisProfile.SHELLCODE:
 		crimson_forge.analysis.symexec_data_identification_ret(exec_seg)
-		tainted_self_refs = crimson_forge.analysis.symexec_tainted_self_reference_identification(exec_seg)
-		if tainted_self_refs:
-			printer.print_warning('Identified tainted self-references, can not rewrite instructions')
+		try:
+			tainted_self_refs = crimson_forge.analysis.symexec_tainted_self_reference_identification(exec_seg)
+		except crimson_forge.errors.AnalysisError as error:
+			printer.print_warning('Analysis failed while identifying tainted self-references')
+			printer.print_warning(error.message)
+			# setting replacements to False errs on the side of caution
 			replacements = False
+		else:
+			if tainted_self_refs:
+				printer.print_warning('Identified tainted self-references, can not rewrite instructions')
+				replacements = False
 
 	printer.print_status("Total blocks: {:,}".format(len(exec_seg.blocks)))
 	printer.print_status("    basic:    {:,}".format(sum(1 for blk in exec_seg.blocks.values() if isinstance(blk, crimson_forge.BasicBlock))))

@@ -36,6 +36,7 @@ import functools
 import logging
 
 import crimson_forge.block as block
+import crimson_forge.errors as errors
 import crimson_forge.ir as ir
 
 import angr
@@ -283,7 +284,7 @@ def symexec_data_identification_ret(exec_seg):
 def symexec_tainted_self_reference_identification(exec_seg):
 	"""
 	Identify if there are self-references with static offsets (classified as
-	"tainted" for the purposes of this analysis. This is necessary to know in
+	"tainted" for the purposes of this analysis). This is necessary to know in
 	the event that the size of the executable changes, probably making the
 	offset inaccurate and thus corrupting the binary.
 
@@ -301,9 +302,9 @@ def symexec_tainted_self_reference_identification(exec_seg):
 	def _simulate_state_recursively(state, history):
 		target_address = state.solver.eval(state.regs.ip)
 		blk = exec_seg.blocks.get(target_address)
-		if blk is None:
+		if not isinstance(blk, block.BasicBlock):
 			# todo: this should probably do something more intelligent, we're losing track here if this occurs
-			raise RuntimeError('Encountered address that does not correlate to a block')
+			raise errors.AnalysisError("Encountered address that does not correlate to a basic-block at 0x{0:04x}".format(target_address))
 		simgr = project.factory.simulation_manager(state)
 		simgr.step(num_inst=len(blk.instructions))
 		result = True
