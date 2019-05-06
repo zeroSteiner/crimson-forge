@@ -1,3 +1,6 @@
+.. image:: https://securestate.nyc3.digitaloceanspaces.com/crimson-forge/crimson-forge-logo.png
+   :align: center
+
 Crimson Forge
 =============
 
