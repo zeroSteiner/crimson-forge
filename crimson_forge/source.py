@@ -48,7 +48,7 @@ def remove_comments(text: str, comment_char: str = ';') -> str:
 	:param comment_char: The character marking the start of a comment.
 	:return: The source text without comments.
 	"""
-	# todo: this should use a regex incase theres a ';' in the source
+	# todo: this should use a regex incase there is a ';' in the source
 	lines = text.split('\n')
 	return '\n'.join([line.split(comment_char, 1)[0].rstrip() for line in lines])
 

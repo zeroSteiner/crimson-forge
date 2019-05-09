@@ -146,19 +146,9 @@ class IRRegister(object):
 		:param str name: The name of the register to create for the architecture.
 		:rtype: :py:class:`.IRRegister`
 		"""
-		# todo: remove this dirty hack once https://github.com/angr/archinfo/pull/57 is landed and released
-		modifier = 0
-		original_name = None
-		if isinstance(arch, archinfo.ArchAMD64):
-			match = re.match(r'r\d+(?P<variant>[dwb])', name)
-			if match is not None:
-				modifier = {'d': -4, 'w': -6, 'b': -7}[match.group('variant')]
-				original_name = name
-				name = name[:-1]
 		offset, size = arch.registers[name]
-		size += modifier
 		offset *= arch.byte_width
-		return cls(arch, range(offset, offset + (size * arch.byte_width)), name=original_name)
+		return cls(arch, range(offset, offset + (size * arch.byte_width)), name=name)
 
 	@classmethod
 	def from_ir(cls, arch, offset, size=None):
