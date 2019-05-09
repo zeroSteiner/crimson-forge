@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-archinfo = "*"
+archinfo = "==8.19.4.5"
 capstone = "*"
 keystone-engine = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/keystone-engine-0.9.1.post3.zip"}
 networkx = "*"
@@ -15,7 +15,7 @@ termcolor = "*"
 boltons = "*"
 smoke-zephyr = "*"
 lief = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/pylief-0.9.0.dev.zip"}
-angr = "==8.19.2.4"
+angr = "==8.19.4.5"
 bullet = "*"
 
 [dev-packages]

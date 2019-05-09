@@ -92,7 +92,7 @@ class SelfReferenceTracker(angr.SimStatePlugin):
 			handler(state)
 
 	def _breakpoint_expr(self, state):
-		expr = state.inspect.expr
+		expr = state.inspect.expr_result
 		if not expr.symbolic:
 			return
 		if expr in self.expressions:
