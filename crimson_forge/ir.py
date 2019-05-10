@@ -148,7 +148,7 @@ class IRRegister(object):
 		"""
 		offset, size = arch.registers[name]
 		offset *= arch.byte_width
-		return cls(arch, range(offset, offset + (size * arch.byte_width)), name=name)
+		return cls(arch, range(offset, offset + (size * arch.byte_width)))
 
 	@classmethod
 	def from_ir(cls, arch, offset, size=None):
