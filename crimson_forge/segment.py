@@ -195,7 +195,8 @@ class ExecutableSegment(base.Base):
 			if isinstance(blk, block.DataBlock):
 				blob += blk.bytes
 			elif isinstance(blk, block.BasicBlock):
-				for instruction in blk.permutation_instructions(replacements=False):
+				graph = blk.to_digraph()
+				for instruction in graph.to_instructions():
 					blob += instruction.bytes
 		return blob
 
