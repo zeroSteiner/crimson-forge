@@ -279,6 +279,8 @@ class ExecutableSegment(base.Base):
 		if replacements:
 			blob = self._permutation_bytes_replacements()
 		else:
+			# fixme: this is broken and leads to an attribute error when replacements are disabled
+			# the issue is an attribute issue in the method below
 			blob = self._permutation_bytes()
 		return blob
 

@@ -17,6 +17,7 @@ smoke-zephyr = "*"
 lief = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/pylief-0.9.0.dev.zip"}
 angr = "==8.19.4.5"
 bullet = "*"
+jinja2 = "*"
 
 [dev-packages]
 ipython = "*"

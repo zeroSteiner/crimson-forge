@@ -41,9 +41,7 @@ import crimson_forge.ir as ir
 import crimson_forge.source as source
 import crimson_forge.ssa as ssa
 
-import boltons.iterutils
 import graphviz
-import networkx
 import networkx.algorithms
 
 logger = logging.getLogger('crimson-forge.basic-block')
@@ -102,23 +100,7 @@ class DataBlock(BlockBase):
 		return "<{} arch: {}, at: 0x{:04x}, size: {}, data: {!r} >".format(self.__class__.__name__, self.arch.name, self.address, self.size, self.bytes)
 
 	def source_iter(self):
-		chunk_size = 8
-		for row, chunk in enumerate(boltons.iterutils.chunked(bytearray(self.bytes), chunk_size, fill=-1)):
-			ascii_col = ''
-			hex_bytes = []
-			for byte in chunk:
-				if byte != -1:
-					hex_bytes.append("0x{0:02x}".format(byte))
-				if byte == -1:
-					ascii_col += ' '
-				elif byte < 32 or byte > 126:
-					ascii_col += '.'
-				else:
-					ascii_col += chr(byte)
-			yield source.SourceLine(
-				".byte {}".format(', '.join(hex_bytes)),
-				comment="+0x{:>04x}  ".format(row * chunk_size) + ascii_col
-			)
+		yield from source.raw_bytes(self.bytes)
 
 class InstructionsDiGraph(networkx.DiGraph):
 	def __init__(self, instructions, *args, **kwargs):

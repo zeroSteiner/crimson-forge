@@ -35,10 +35,50 @@ import enum
 import logging
 
 import archinfo
+import boltons.iterutils
 
 logger = logging.getLogger('crimson-forge.source')
 
 REGEX_INSTRUCTION_END = r'(\s+;(?P<comment>.*))?$'
+
+# https://github.com/rapid7/metasploit-framework/blob/b83c6ad496579bc9a3a318bdcce14db222a1f788/modules/payloads/singles/windows/x64/messagebox.rb#L35-L59
+def _ror(dword, arg, bits=32):
+	mask = (2 ** arg) - 1
+	mask_bits = dword & mask
+	return (dword >> arg) | (mask_bits << (bits - arg))
+
+def _block_api_hash(message):
+	hash = 0
+	for byte in message:
+		hash = _ror(byte + hash, 0xd)
+	return hash
+
+def block_api_hash(libname, function):
+	libname = libname.upper().encode('utf-16le') + b'\x00'
+	function = function.encode('ascii')
+	return (_block_api_hash(libname) + _block_api_hash(function)) & 0xffffffff
+
+def raw_bytes(data):
+	chunk_size = 8
+	for row, chunk in enumerate(boltons.iterutils.chunked(bytearray(data), chunk_size, fill=-1)):
+		ascii_col = ''
+		hex_bytes = []
+		for byte in chunk:
+			if byte != -1:
+				hex_bytes.append("0x{0:02x}".format(byte))
+			if byte == -1:
+				ascii_col += ' '
+			elif byte < 32 or byte > 126:
+				ascii_col += '.'
+			else:
+				ascii_col += chr(byte)
+		yield SourceLine(
+			".byte {}".format(', '.join(hex_bytes)),
+			comment="+0x{:>04x}  ".format(row * chunk_size) + ascii_col
+		)
+
+def raw_string(data, encoding='ascii'):
+	yield from raw_bytes(data.encode(encoding))
 
 def remove_comments(text: str, comment_char: str = ';') -> str:
 	"""
