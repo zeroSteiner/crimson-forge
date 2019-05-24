@@ -31,18 +31,24 @@
 #
 
 import argparse
+import functools
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..')
+sys.path.append(relpath())
 
 import crimson_forge
 import crimson_forge.cli as cli
 import crimson_forge.source as source
 
+import jinja2
 import keystone
 
 architectures = cli.architectures
+
+def _block_api_hash(*args):
+	return "0x{:>08x}".format(source.block_api_hash(*args))
 
 def main():
 	parser = argparse.ArgumentParser(
@@ -59,8 +65,23 @@ def main():
 	printer = crimson_forge.utilities
 
 	arch = architectures[args.arch]
+	environment = jinja2.Environment(
+		extensions=['jinja2.ext.do'],
+		loader=jinja2.FileSystemLoader([relpath('data', 'stubs')]),
+		lstrip_blocks=True,
+		trim_blocks=True,
+	)
+	# functions
+	environment.globals['api_hash'] = _block_api_hash
+	environment.globals['arch'] = args.arch
+	environment.globals['raw_bytes'] = source.raw_bytes
+	environment.globals['raw_string'] = source.raw_string
+
 	text = args.input.read()
+	template = environment.from_string(text)
+	text = template.render()
 	text = source.remove_comments(text)
+
 	try:
 		assembled = bytes(arch.keystone.asm(text, 0x1000)[0])
 	except keystone.KsError as error:
