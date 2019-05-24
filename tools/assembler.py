@@ -47,6 +47,11 @@ import keystone
 
 architectures = cli.architectures
 
+def _jinja_assert(value, message):
+	if not value:
+		raise AssertionError("Jinja assertion '{0}' failed".format(message))
+	return ''
+
 def _block_api_hash(*args):
 	return "0x{:>08x}".format(source.block_api_hash(*args))
 
@@ -74,6 +79,7 @@ def main():
 	# functions
 	environment.globals['api_hash'] = _block_api_hash
 	environment.globals['arch'] = args.arch
+	environment.globals['assert'] = _jinja_assert
 	environment.globals['raw_bytes'] = source.raw_bytes
 	environment.globals['raw_string'] = source.raw_string
 
