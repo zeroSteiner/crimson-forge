@@ -12,7 +12,8 @@ _macro_string{{ ___macro_strings | length }}:
 {%- endmacro %}
 
 {% macro _amd64_memcpy(dest, src, n) %}
-  mov rcx, {{ n }}
+  mov rcx, {% if n is number %}{{ '0x%0x' % n }}{% else %}{{ n }}{% endif %}
+
   {% if dest != 'rsi' %}mov rsi, {{ src }}{% endif %}
   {% if dest != 'rdi' %}mov rdi, {{ dest }}{% endif %}
   mov rax, rdi
@@ -20,7 +21,8 @@ _macro_string{{ ___macro_strings | length }}:
 {% endmacro %}
 
 {% macro _amd64_memset(dest, val, n) %}
-  mov rcx, {{ n }}
+  mov rcx, {% if n is number %}{{ '0x%0x' % n }}{% else %}{{ n }}{% endif %}
+
 {% if val != 'rax' %}
   mov rax, {{ val }}
 {% endif %}
@@ -33,7 +35,8 @@ _macro_string{{ ___macro_strings | length }}:
 {% endmacro %}
 
 {% macro _x86_memcpy(dest, src, n) %}
-  mov ecx, {{ n }}
+  mov ecx, {% if n is number %}{{ '0x%0x' % n }}{% else %}{{ n }}{% endif %}
+
   {% if dest != 'esi' %}mov esi, {{ src }}{% endif %}
   {% if dest != 'edi' %}mov edi, {{ dest }}{% endif %}
   mov eax, edi
@@ -41,7 +44,8 @@ _macro_string{{ ___macro_strings | length }}:
 {% endmacro %}
 
 {% macro _x86_memset(dest, val, n) %}
-  mov ecx, {{ n }}
+  mov ecx, {% if n is number %}{{ '0x%0x' % n }}{% else %}{{ n }}{% endif %}
+
 {% if val != 'eax' %}
   mov eax, {{ val }}
 {% endif %}

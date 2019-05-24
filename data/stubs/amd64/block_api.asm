@@ -2,16 +2,20 @@
 {%- macro api_call(libname, funcname, arg1=None, arg2=None, arg3=None, arg4=None) -%}
   ; call {{ libname }}!{{ funcname }}
 {% if arg4 != None %}
-  mov r9, {{ arg4 }}
+  mov r9, {% if arg4 is number %}{{ '0x%0x' % arg4 }}{% else %}{{ arg4 }}{% endif %}
+
 {% endif %}
 {% if arg3 != None %}
-  mov r8, {{ arg3 }}
+  mov r8, {% if arg3 is number %}{{ '0x%0x' % arg3 }}{% else %}{{ arg3 }}{% endif %}
+
 {% endif %}
 {% if arg2 != None %}
-  mov rdx, {{ arg2 }}
+  mov rdx, {% if arg2 is number %}{{ '0x%0x' % arg2 }}{% else %}{{ arg2 }}{% endif %}
+
 {% endif %}
 {% if arg1 != None %}
-  mov rcx, {{ arg1 }}
+  mov rcx, {% if arg1 is number %}{{ '0x%0x' % arg1 }}{% else %}{{ arg1 }}{% endif %}
+
 {% endif %}
   mov r10d, {{ api_hash(libname, funcname) }}                                      ; r10d = api_hash('{{ libname }}', '{{ funcname }}')
   call rbp
