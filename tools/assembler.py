@@ -42,15 +42,28 @@ import crimson_forge
 import crimson_forge.cli as cli
 import crimson_forge.source as source
 
+import jinja_vanish
 import jinja2
 import keystone
 
 architectures = cli.architectures
 
+@jinja_vanish.markup_escape_func
+def _asm_escape(value):
+	if isinstance(value, int):
+		return "0x{:x}".format(value)
+	return value
+
 def _jinja_assert(value, message):
 	if not value:
 		raise AssertionError("Jinja assertion '{0}' failed".format(message))
 	return ''
+
+def _jinja_bw_or(*values):
+	result = 0
+	for value in values:
+		result |= value
+	return result
 
 def _block_api_hash(*args):
 	return "0x{:>08x}".format(source.block_api_hash(*args))
@@ -70,7 +83,9 @@ def main():
 	printer = crimson_forge.utilities
 
 	arch = architectures[args.arch]
-	environment = jinja2.Environment(
+	environment = jinja_vanish.DynAutoEscapeEnvironment(
+		autoescape=True,
+		escape_func=_asm_escape,
 		extensions=['jinja2.ext.do'],
 		loader=jinja2.FileSystemLoader([relpath('data', 'stubs')]),
 		lstrip_blocks=True,
@@ -80,6 +95,7 @@ def main():
 	environment.globals['api_hash'] = _block_api_hash
 	environment.globals['arch'] = args.arch
 	environment.globals['assert'] = _jinja_assert
+	environment.globals['bw_or'] = _jinja_bw_or
 	environment.globals['raw_bytes'] = source.raw_bytes
 	environment.globals['raw_string'] = source.raw_string
 
