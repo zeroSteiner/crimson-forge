@@ -148,7 +148,7 @@ def _get_random_pe_signature():
 	)
 	return signature['data']
 
-def _handle_output(args, printer, arch, data):
+def handle_output(args, printer, arch, data):
 	pe_signature = None
 	if any(output_format.value.startswith('pe:') for output_format in args.output_formats) and args.pe_forge_signature:
 		pe_signature = _get_random_pe_signature()
@@ -178,6 +178,7 @@ def _handle_output(args, printer, arch, data):
 			printer.print_error('Unsupported architecture for pe:exe:svc output: ' + arch.name)
 
 	if DataFormat.RAW in args.output_formats:
+		printer.print_status('raw output hash (SHA-256): ' + hash(data))
 		with _handle_output_file(args, arch, DataFormat.RAW) as file_h:
 			file_h.write(data)
 
@@ -207,6 +208,30 @@ class AppendOverrideDefaultAction(argparse.Action):
 			self.reset_dest = False
 		getattr(namespace, self.dest).append(value)
 
+def add_output_arguments(parser, required=False):
+	output_group = parser.add_argument_group('output options')
+	output_group.add_argument(
+		'--output-format',
+		dest='output_formats',
+		default=[DataFormat.RAW],
+		action=AppendOverrideDefaultAction,
+		metavar='FORMAT',
+		type=argtype_data_format,
+		help='the output format (see: data format choices)'
+	)
+	output_group.add_argument(
+		'--pe-forge-signature',
+		dest='pe_forge_signature',
+		default=False,
+		action='store_true',
+		help='add a forged signature to the pe file'
+	)
+	parser.add_argument(
+		'output',
+		nargs=(None if required else '?'),
+		help='the optional output file'
+	)
+
 def main(args=None, input_data=None, printer=None):
 	start_time = datetime.datetime.utcnow()
 	parser = argparse.ArgumentParser(
@@ -229,17 +254,14 @@ def main(args=None, input_data=None, printer=None):
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format (see: data format choices)')
 	parser.add_argument('-v', '--version', action='version', version='%(prog)s Version: ' + crimson_forge.__version__)
 	parser.add_argument('--analysis-profile', dest='analysis_profile', default=None, metavar='PROFILE', type=argtype_analysis_profile, help='the analysis profile to use (see: analysis profile choices)')
-	parser.add_argument('--output-format', dest='output_formats', default=[DataFormat.RAW], action=AppendOverrideDefaultAction, metavar='FORMAT', type=argtype_data_format, help='the output format (see: data format choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
-
-	parser.add_argument('--pe-forge-signature', dest='pe_forge_signature', default=False, action='store_true', help='add a forged signature to the pe file')
 
 	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
 	parser.add_argument('--skip-banner', dest='show_banner', default=True, action='store_false', help='skip printing the banner')
 	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
 	if input_data is None:
 		parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
-	parser.add_argument('output', nargs='?', help='the optional output file')
+	add_output_arguments(parser)
 
 	args = parser.parse_args(args)
 	smoke_zephyr.utilities.configure_stream_logger(
@@ -315,7 +337,7 @@ def main(args=None, input_data=None, printer=None):
 		else:
 			printer.print_status('Output length: ' + boltons.strutils.bytes2human(len(output_data)) + ' (correct)')
 		printer.print_status('Raw output hash (SHA-256): ' + hash(output_data))
-		_handle_output(args, printer, arch, output_data)
+		handle_output(args, printer, arch, output_data)
 	else:
 		printer.print_status('No output file specified')
 

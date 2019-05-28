@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  tools/asssembler.py
+#  tools/servicizer.py
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are
@@ -31,6 +31,12 @@
 #
 
 import argparse
+import functools
+import os
+import sys
+
+relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..')
+sys.path.append(relpath())
 
 import crimson_forge
 import crimson_forge.assembler as assembler
@@ -44,14 +50,14 @@ architectures = cli.architectures
 def main():
 	parser = argparse.ArgumentParser(
 		'crimson-forge',
-		description="Crimson Forge Assembler v{0}".format(crimson_forge.__version__),
+		description="Crimson Forge Servicizer v{0}".format(crimson_forge.__version__),
 		conflict_handler='resolve',
 		formatter_class=argparse.RawTextHelpFormatter,
 		fromfile_prefix_chars='@'
 	)
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture')
-	parser.add_argument('-r', '--render', action='store_true', default=False, help='render the source as a template')
-	parser.add_argument('input', type=argparse.FileType('r'), help='the input file')
+	parser.add_argument('--debug-output', type=argparse.FileType('w'), help='a path to write the debug asm to')
+	parser.add_argument('input', type=argparse.FileType('rb'), help='the payload to convert')
 	cli.add_output_arguments(parser, required=True)
 
 	args = parser.parse_args()
@@ -59,9 +65,16 @@ def main():
 
 	arch = architectures[args.arch]
 
-	text = args.input.read()
-	if args.render:
-		text = assembler.render_source(arch, text)
+	payload = args.input.read()
+	source_path = relpath('data', 'stubs', arch.name.lower(), 'service_wrapper.asm')
+	if not os.path.isfile(source_path):
+		printer.print_error('the selected architecture is not supported by this functionality')
+		return
+	with open(source_path, 'r') as file_h:
+		text = file_h.read()
+	text = assembler.render_source(arch, text, variables={'payload': payload})
+	if args.debug_output:
+		args.debug_output.write(text)
 
 	try:
 		assembled = assembler.assemble_source(arch, text)
