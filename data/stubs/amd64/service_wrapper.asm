@@ -190,7 +190,7 @@ _servicemain_close:
   {{ api_call('kernel32.dll', 'ResumeThread') }}
   mov rcx, [rsp + {{ stkoff_pi + 8 }}]                          ; rcx = pi.hThread
   {{ api_call('kernel32.dll', 'CloseHandle') }}
-  mov rcx, [rsp + {{ stkoff_pi + 0 }}                           ; rcx = pi.hProcess
+  mov rcx, [rsp + {{ stkoff_pi + 0 }}]                          ; rcx = pi.hProcess
   {{ api_call('kernel32.dll', 'CloseHandle') }}
 
 _servicemain_exit:
