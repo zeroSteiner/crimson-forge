@@ -3,6 +3,7 @@
 *.ods#
 *.pdf
 *.py[cod]
+*.vcxproj.user
 
 .pylintrc
 .python-version

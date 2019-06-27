@@ -1,6 +1,6 @@
 {% set ___macro_strings = [] %}
 
-{% macro load_string(value, register) -%}
+{% macro load_string(value, register=None) -%}
   {% do ___macro_strings.append(value) -%}
   ; {{ register }} = &'{{ value }}'
   call _macro_string{{ ___macro_strings | length }}
@@ -8,7 +8,7 @@
   {{ source_line.code }}
   {% endfor %}
 _macro_string{{ ___macro_strings | length }}:
-  pop {{ register }}
+{% if register is not none %}  pop {{ register }}{% endif %}
 {%- endmacro %}
 
 {% macro _amd64_memcpy(dest, src, n) %}
@@ -23,7 +23,9 @@ _macro_string{{ ___macro_strings | length }}:
 {% macro _amd64_memset(dest, val, n) %}
   mov rcx, {% if n is number %}{{ '0x%0x' % n }}{% else %}{{ n }}{% endif %}
 
-{% if val != 'rax' %}
+{% if val == 0 %}
+  xor rax, rax
+{% elif val != 'rax' %}
   mov rax, {{ val }}
 {% endif %}
 {% if dest != 'rdi' %}
@@ -46,7 +48,9 @@ _macro_string{{ ___macro_strings | length }}:
 {% macro _x86_memset(dest, val, n) %}
   mov ecx, {% if n is number %}{{ '0x%0x' % n }}{% else %}{{ n }}{% endif %}
 
-{% if val != 'eax' %}
+{% if val == 0 %}
+  xor eax, eax
+{% elif val != 'eax' %}
   mov eax, {{ val }}
 {% endif %}
 {% if dest != 'edi' %}
