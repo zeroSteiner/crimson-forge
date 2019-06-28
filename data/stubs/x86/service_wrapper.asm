@@ -4,7 +4,7 @@
 {% from 'x86/block_api.asm' import api_define %}
 
 {% set PAYLOAD_SIZE = payload | length %}
-{% set SERVICE_NAME = 'CFService' %}
+{% set SERVICE_NAME = 'CFService1' %}
 {#
     general flags
 #}
@@ -47,14 +47,15 @@ main:
   {# uncomment the line below to include a 20-second sleep before executing the
    # main functionality, this provides the user with the opportunity to attach a
    # debugger to inspect the process #}
-  {# api_call('kernel32.dll', 'Sleep', 20000) #}
+
+  {{ api_call('kernel32.dll', 'Sleep', 20000) }}
   ; load advapi32.dll so it's available
-  {{ load_string('advapi32.dll', 'ecx') }}
+  {{ load_string('advapi32.dll', register=None) }}
   {{ api_call('kernel32.dll', 'LoadLibraryA') }}
   ; allocate 16 bytes of space for SERVICE_TABLE_ENTRY
   sub esp, 0x10
   xor eax, eax                                              ; eax = 0
-  mov [esp+0x12], eax                                       ; pServiceTable[1]->lpServiceName = NULL
+  mov [esp+0x0c], eax                                       ; pServiceTable[1]->lpServiceName = NULL
   mov [esp+0x08], eax                                       ; pServiceTable[1]->lpServiceProc = NULL
   call get_servicemain
 
@@ -143,7 +144,6 @@ servicehandler_setstatus:
 get_servicehandler:
   call get_servicename
   push eax
-
   {{ api_call('advapi32.dll', 'RegisterServiceCtrlHandlerExA') }}
 
   mov edi, [esp + {{ stkoff_store }}]
