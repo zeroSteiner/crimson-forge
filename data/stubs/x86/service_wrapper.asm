@@ -4,7 +4,6 @@
 {% from 'x86/block_api.asm' import api_define %}
 
 {% set PAYLOAD_SIZE = payload | length %}
-{% set SERVICE_NAME = 'CFService1' %}
 {#
     general flags
 #}
@@ -232,7 +231,7 @@ get_servicemain:
   ret
 
 get_servicename:
-  {{ load_string(SERVICE_NAME, 'eax') }}
+  {{ load_string(service_name, 'eax') }}
   ret
 
 ; get the address of the payload to inject

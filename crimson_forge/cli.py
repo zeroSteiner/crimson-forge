@@ -31,7 +31,6 @@
 #
 
 import argparse
-import collections
 import contextlib
 import datetime
 import enum
@@ -47,9 +46,9 @@ import crimson_forge.analysis
 import crimson_forge.binfile
 import crimson_forge.catalog
 import crimson_forge.errors
+import crimson_forge.servicizer
 import crimson_forge.utilities
 
-import archinfo
 import boltons.iterutils
 import boltons.strutils
 import boltons.timeutils
@@ -73,44 +72,15 @@ analysis profile choices:
 
 data format choices:
   pe:exe           a portable executable
-  pe:exe:svc       a portable executable (service variant)
+  pe:exe:svc       a portable executable (windows service compatible variant)
   raw              raw executable code
+  raw:svc          raw executable code (windows service compatible variant)
   source           assembly source code
 """
 
-architectures = {
-	'amd64': archinfo.ArchAMD64(),
-	'x86': archinfo.ArchX86(),
-}
+DataFormat = crimson_forge.utilities.DataFormat
+architectures = crimson_forge.utilities.architectures
 logger = logging.getLogger('crimson-forge.cli')
-
-_DataFormatSpec = collections.namedtuple('_DataFormatSpec', ('value', 'extension'))
-@enum.unique
-class DataFormat(enum.Enum):
-	def __new__(cls, value, extension, **kwargs):
-		obj = object.__new__(cls)
-		obj._value_ = value
-		obj.extension = extension
-		return obj
-	PE_EXE = _DataFormatSpec('pe:exe', 'exe')
-	#PE_EXE_DLL = _DataFormatSpec('pe:exe:dll', 'dll')
-	PE_EXE_SVC = _DataFormatSpec('pe:exe:svc', 'svc.exe')
-	RAW = _DataFormatSpec('raw', 'bin')
-	SOURCE = _DataFormatSpec('source', 'asm')
-
-	@classmethod
-	def guess(cls, path):
-		formats = sorted(cls, key=lambda format: len(format.extension), reverse=True)
-		for format in formats:
-			if path.endswith('.' + format.extension):
-				break
-		else:
-			format = cls.RAW
-		if format.extension.endswith('exe'):
-			with open(path, 'rb') as file_h:
-				if file_h.read(2) != b'MZ':
-					format = cls.RAW
-		return format
 
 @enum.unique
 class AnalysisProfile(enum.Enum):
@@ -155,32 +125,30 @@ def handle_output(args, printer, arch, data):
 		if pe_signature is None:
 			logger.warning('Failed to select a random PE file signature')
 
+	def _build_pe(format, data):
+		pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
+		if pe_signature:
+			pe_data = crimson_forge.binfile.patch_pe_signature(pe_data, pe_signature)
+		printer.print_status(format.value + ' output hash (SHA-256): ' + hash(pe_data))
+		with _handle_output_file(args, arch, DataFormat.PE_EXE) as file_h:
+			file_h.write(pe_data)
+
 	if DataFormat.PE_EXE in args.output_formats:
-		if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
-			pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
-			if pe_signature:
-				pe_data = crimson_forge.binfile.patch_pe_signature(pe_data, pe_signature)
-			printer.print_status('pe:exe output hash (SHA-256): ' + hash(pe_data))
-			with _handle_output_file(args, arch, DataFormat.PE_EXE) as file_h:
-				file_h.write(pe_data)
-		else:
-			printer.print_error('Unsupported architecture for pe:exe output: ' + arch.name)
+		_build_pe(DataFormat.PE_EXE, data)
 
 	if DataFormat.PE_EXE_SVC in args.output_formats:
-		if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
-			pe_data = crimson_forge.binfile.patch_pe_with_shellcode(arch, data, 'template-service', {'SERVICE_NAME:': 'Crimson Forge'})
-			if pe_signature:
-				pe_data = crimson_forge.binfile.patch_pe_signature(pe_data, pe_signature)
-			printer.print_status('pe:exe:svc output hash (SHA-256): ' + hash(pe_data))
-			with _handle_output_file(args, arch, DataFormat.PE_EXE_SVC) as file_h:
-				file_h.write(pe_data)
-		else:
-			printer.print_error('Unsupported architecture for pe:exe:svc output: ' + arch.name)
+		_build_pe(DataFormat.PE_EXE_SVC, crimson_forge.servicizer.to_windows_service(arch, data))
 
 	if DataFormat.RAW in args.output_formats:
 		printer.print_status('raw output hash (SHA-256): ' + hash(data))
 		with _handle_output_file(args, arch, DataFormat.RAW) as file_h:
 			file_h.write(data)
+
+	if DataFormat.RAW_SVC in args.output_formats:
+		tmp_data = crimson_forge.servicizer.to_windows_service(arch, data)
+		printer.print_status('raw:svc output hash (SHA-256): ' + hash(tmp_data))
+		with _handle_output_file(args, arch, DataFormat.RAW_SVC) as file_h:
+			file_h.write(tmp_data)
 
 	if DataFormat.SOURCE in args.output_formats:
 		o_exec_seg = crimson_forge.segment.ExecutableSegment(data, arch)

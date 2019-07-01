@@ -71,13 +71,13 @@ import sys
 relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..')
 sys.path.append(relpath())
 
-import crimson_forge.cli as cli
 import crimson_forge.source as source
+import crimson_forge.utilities as utilities
 
 import jinja_vanish
 import jinja2
 
-architectures = cli.architectures
+architectures = utilities.architectures
 
 @jinja_vanish.markup_escape_func
 def _asm_escape(value):

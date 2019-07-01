@@ -30,11 +30,14 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import collections
+import enum
 import logging
 import os
 import re
 import traceback
 
+import archinfo
 import termcolor
 
 LEVEL_COLORS = {
@@ -44,6 +47,12 @@ LEVEL_COLORS = {
 	logging.ERROR: ('red',),
 	logging.CRITICAL: ('white', 'on_red')
 }
+
+architectures = {
+	'amd64': archinfo.ArchAMD64(),
+	'x86': archinfo.ArchX86(),
+}
+
 print_colors = True
 
 def print_error(message):
@@ -127,3 +136,31 @@ class ColoredLogFormatter(logging.Formatter):
 			line = line[:-len(os.linesep)]
 		tb_lines[-1] = line
 		return ''.join(tb_lines)
+
+_DataFormatSpec = collections.namedtuple('_DataFormatSpec', ('value', 'extension'))
+@enum.unique
+class DataFormat(enum.Enum):
+	def __new__(cls, value, extension, **kwargs):
+		obj = object.__new__(cls)
+		obj._value_ = value
+		obj.extension = extension
+		return obj
+	PE_EXE = _DataFormatSpec('pe:exe', 'exe')
+	#PE_EXE_DLL = _DataFormatSpec('pe:exe:dll', 'dll')
+	PE_EXE_SVC = _DataFormatSpec('pe:exe:svc', 'svc.exe')
+	RAW = _DataFormatSpec('raw', 'bin')
+	RAW_SVC = _DataFormatSpec('raw:svc', 'svc.bin')
+	SOURCE = _DataFormatSpec('source', 'asm')
+	@classmethod
+	def guess(cls, path):
+		formats = sorted(cls, key=lambda format: len(format.extension), reverse=True)
+		for format in formats:
+			if path.endswith('.' + format.extension):
+				break
+		else:
+			format = cls.RAW
+		if format.extension.endswith('exe'):
+			with open(path, 'rb') as file_h:
+				if file_h.read(2) != b'MZ':
+					format = cls.RAW
+		return format

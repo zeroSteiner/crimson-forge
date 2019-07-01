@@ -45,7 +45,7 @@ import crimson_forge.utilities as utilities
 
 import keystone
 
-architectures = cli.architectures
+architectures = utilities.architectures
 
 def main():
 	parser = argparse.ArgumentParser(

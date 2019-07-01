@@ -36,19 +36,20 @@ import os
 relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..')
 
 import crimson_forge.assembler as assembler
-import crimson_forge.cli as cli
+import crimson_forge.utilities as utilities
 
-architectures = cli.architectures
+architectures = utilities.architectures
 
 PAGE_EXECUTE_READ = 0x20
 PAGE_EXECUTE_READWRITE = 0x40
 
-def to_windows_service(arch, payload, writable=False):
+def to_windows_service(arch, payload, service_name='Crimson Forge', writable=False):
 	source_path = relpath('data', 'stubs', arch.name.lower(), 'service_wrapper.asm')
 	with open(source_path, 'r') as file_h:
 		text = file_h.read()
 	text = assembler.render_source(arch, text, variables={
 		'payload': payload,
-		'permissions': (PAGE_EXECUTE_READWRITE if writable else PAGE_EXECUTE_READ)
+		'permissions': (PAGE_EXECUTE_READWRITE if writable else PAGE_EXECUTE_READ),
+		'service_name': service_name
 	})
 	return assembler.assemble_source(arch, text)

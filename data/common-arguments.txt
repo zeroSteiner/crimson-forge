@@ -7,5 +7,7 @@ pe:exe:svc
 --output-format
 raw
 --output-format
+raw:svc
+--output-format
 source
 --pe-forge-signature
