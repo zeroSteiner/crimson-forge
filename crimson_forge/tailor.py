@@ -298,7 +298,7 @@ class ConstantMove(AlterationBase):
 		))
 
 @register_alteration()
-class ConstantAdd(AlterationBase):
+class ConstantSubtract(AlterationBase):
 	architectures = (amd64, x86)
 	name = 'constant_subtract'
 	def check_instruction(self, ins):
