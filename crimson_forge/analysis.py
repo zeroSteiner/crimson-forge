@@ -263,7 +263,7 @@ def symexec_data_identification_ret(exec_seg):
 		parent_bblock = tuple(blk.parents.values())[0]
 		if parent_bblock.ir_jumpkind != ir.JumpKind.Call:
 			continue
-		if blk.address != parent_bblock.address + parent_bblock.size:
+		if blk.address != parent_bblock.next_address:
 			continue
 		if len(parent_bblock.children) == 1:
 			# this would be the case if the call is not a constant, e.g. "call eax"

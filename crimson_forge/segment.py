@@ -157,7 +157,7 @@ class ExecutableSegment(base.Base):
 			# if no block is found, build a new one from the blob (if there is data left)
 			blob = self.bytes[jump.to_address - self.base:]
 			if blob:
-				self._process_irsb(self.__vex_lift(blob, jump.to_address), parent=self.blocks.for_address(jump.from_address))
+				self._process_irsb(self.__vex_lift(blob, jump.to_address), parent=bblock)
 
 	def __process_irsb_jk_no_decode(self, irsb):
 		offset = irsb.addr - self.base
