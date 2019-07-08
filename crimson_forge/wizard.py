@@ -152,9 +152,8 @@ def _get_output_formats():
 	)
 	return output_formats
 
-def main():
+def _run_wizard(printer):
 	print(cli.BANNER)
-	printer = crimson_forge.utilities
 	arguments = []
 
 	arch = _bullet('Please select the target architecture:', cli.architectures.keys(), default='x86')
@@ -197,6 +196,15 @@ def main():
 			return os.EX_USAGE
 		with open(arguments_file, 'w') as file_h:
 			file_h.write('\n'.join(arguments))
+	return arguments
+
+def main():
+	printer = crimson_forge.utilities
+	try:
+		arguments = _run_wizard(printer)
+	except KeyboardInterrupt:
+		printer.print_status('Intercepted Ctrl+C, now exiting...')
+		return os.EX_USAGE
 
 	arguments.insert(0, '--skip-banner')
 	return cli.main(arguments)
