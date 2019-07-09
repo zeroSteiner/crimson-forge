@@ -1,7 +1,7 @@
-{% from 'macros.asm' import load_string %}
-{% from 'macros.asm' import memset %}
-{% from 'x86/block_api.asm' import api_call %}
-{% from 'x86/block_api.asm' import api_define %}
+{% from 'macros.jnj.asm' import load_string %}
+{% from 'macros.jnj.asm' import memset %}
+{% from 'x86/block_api.jnj.asm' import api_call %}
+{% from 'x86/block_api.jnj.asm' import api_define %}
 
 {% set PAYLOAD_SIZE = payload | length %}
 {#

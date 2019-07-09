@@ -44,7 +44,7 @@ PAGE_EXECUTE_READ = 0x20
 PAGE_EXECUTE_READWRITE = 0x40
 
 def to_windows_service(arch, payload, service_name='Crimson Forge', writable=False):
-	source_path = relpath('data', 'stubs', arch.name.lower(), 'service_wrapper.asm')
+	source_path = relpath('data', 'stubs', arch.name.lower(), 'service_wrapper.jnj.asm')
 	with open(source_path, 'r') as file_h:
 		text = file_h.read()
 	text = assembler.render_source(arch, text, variables={
