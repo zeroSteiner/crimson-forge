@@ -313,14 +313,17 @@ class ExecutableSegment(base.Base):
 	def ssa_variables(self):
 		return ssa.Variables(self.instructions)
 
-	def to_angr(self):
-		project = angr.Project(io.BytesIO(self.bytes), main_opts={
+	def to_angr(self, main_opts=None, **kwargs):
+		opts = {
 			'arch': self.arch,
 			'backend': 'blob',
 			'base_addr': self.base,
 			'entry_point': self.base,
 			'filename': 'crimson-forge.bin'
-		})
+		}
+		if main_opts is not None:
+			opts.update(main_opts)
+		project = angr.Project(io.BytesIO(self.bytes), arch=self.arch, main_opts=opts, **kwargs)
 		return project
 
 	def to_source(self):
