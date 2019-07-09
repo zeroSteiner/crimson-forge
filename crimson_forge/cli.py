@@ -118,26 +118,48 @@ def _get_random_pe_signature():
 	)
 	return signature['data']
 
+class DeferredValue(object):
+	__slots__ = ('__generated', '__value', 'factory')
+	def __init__(self, factory):
+		self.factory = factory
+		self.__generated = False
+		self.__value = None
+
+	@property
+	def value(self):
+		if not self.__generated:
+			self.__value = self.factory()
+			self.__generated = True
+		return self.__value
+
 def handle_output(args, printer, arch, data):
-	pe_signature = None
-	if any(output_format.value.startswith('pe:') for output_format in args.output_formats) and args.pe_forge_signature:
-		pe_signature = _get_random_pe_signature()
-		if pe_signature is None:
+	def _pe_signature_factory():
+		if not args.pe_forge_signature:
+			return None
+		signature = _get_random_pe_signature()
+		if signature is None:
 			logger.warning('Failed to select a random PE file signature')
+		return signature
+
+	def _servicized_factory():
+		return crimson_forge.servicizer.to_windows_service(arch, data)
+
+	pe_signature = DeferredValue(_pe_signature_factory)
+	servicized = DeferredValue(_servicized_factory)
 
 	def _build_pe(format, data):
 		pe_data = crimson_forge.binfile.build_pe_exe_for_shellcode(arch, data)
-		if pe_signature:
-			pe_data = crimson_forge.binfile.patch_pe_signature(pe_data, pe_signature)
+		if pe_signature.value:
+			pe_data = crimson_forge.binfile.patch_pe_signature(pe_data, pe_signature.value)
 		printer.print_status(format.value + ' output hash (SHA-256): ' + hash(pe_data))
-		with _handle_output_file(args, arch, DataFormat.PE_EXE) as file_h:
+		with _handle_output_file(args, arch, format) as file_h:
 			file_h.write(pe_data)
 
 	if DataFormat.PE_EXE in args.output_formats:
 		_build_pe(DataFormat.PE_EXE, data)
 
 	if DataFormat.PE_EXE_SVC in args.output_formats:
-		_build_pe(DataFormat.PE_EXE_SVC, crimson_forge.servicizer.to_windows_service(arch, data))
+		_build_pe(DataFormat.PE_EXE_SVC, servicized.value)
 
 	if DataFormat.RAW in args.output_formats:
 		printer.print_status('raw output hash (SHA-256): ' + hash(data))
@@ -145,7 +167,7 @@ def handle_output(args, printer, arch, data):
 			file_h.write(data)
 
 	if DataFormat.RAW_SVC in args.output_formats:
-		tmp_data = crimson_forge.servicizer.to_windows_service(arch, data)
+		tmp_data = servicized.value
 		printer.print_status('raw:svc output hash (SHA-256): ' + hash(tmp_data))
 		with _handle_output_file(args, arch, DataFormat.RAW_SVC) as file_h:
 			file_h.write(tmp_data)
@@ -304,7 +326,6 @@ def main(args=None, input_data=None, printer=None):
 			crimson_forge.analysis.check_block_sizes(exec_seg)
 		else:
 			printer.print_status('Output length: ' + boltons.strutils.bytes2human(len(output_data)) + ' (correct)')
-		printer.print_status('Raw output hash (SHA-256): ' + hash(output_data))
 		handle_output(args, printer, arch, output_data)
 	else:
 		printer.print_status('No output file specified')
