@@ -105,6 +105,11 @@ class _Blocks(collections.OrderedDict):
 			raise TypeError('argument 1 must be a BlockBase instance')
 		return self.get(blk.address + blk.size)
 
+	def get_previous(self, blk):
+		if not isinstance(blk, block.BlockBase):
+			raise TypeError('argument 1 must be a BlockBase instance')
+		return self.for_address(blk.address - 1)
+
 	def to_digraph(self):
 		graph = BlocksDiGraph(self.values())
 		return graph

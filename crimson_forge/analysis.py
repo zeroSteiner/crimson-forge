@@ -44,21 +44,36 @@ import boltons.iterutils
 
 logger = logging.getLogger('crimson-forge.analysis')
 
+def _absorb_data_block(exec_seg, parent_blk, child_blk):
+	# child_blk is the block to absorb into the parent_blk
+	if not isinstance(parent_blk, block.DataBlock):
+		raise TypeError('argument 2 must be a DataBlock instance')
+	if not isinstance(child_blk, block.DataBlock):
+		raise TypeError('argument 3 must be a DataBlock instance')
+	if parent_blk.next_address != child_blk.address:
+		raise ValueError('the child block is not the direct child of the parent block')
+	parent_blk.bytes += child_blk.bytes
+	if child_blk.address in exec_seg.blocks:
+		del exec_seg.blocks[child_blk.address]
+
 def _basic_to_data_block(exec_seg, blk):
 	logger.info("Converting basic-block at 0x%04x to a data-block", blk.address)
 	blk = blk.to_data_block()
+	prev_blk = exec_seg.blocks.get_previous(blk)
+	if isinstance(prev_blk, block.DataBlock):
+		logger.debug("Absorbing data-block at 0x%04x into data-block at 0x%04x (via cascading)", blk.address, prev_blk.address)
+		_absorb_data_block(exec_seg, prev_blk, blk)
+		blk = prev_blk
 	exec_seg.blocks[blk.address] = blk
 	next_blk = exec_seg.blocks.get_next(blk)
 	while next_blk:
-		# creat a cascading affect of basic to data block conversions
+		# create a cascading effect of basic to data block conversions
 		if isinstance(next_blk, block.BasicBlock) and not next_blk.parents:
 			logger.debug("Converting basic-block at 0x%04x to a data-block (via cascading)", next_blk.address)
 			next_blk = next_blk.to_data_block()
 		if isinstance(next_blk, block.DataBlock):
 			logger.debug("Absorbing data-block at 0x%04x into data-block at 0x%04x (via cascading)", next_blk.address, blk.address)
-			blk.bytes += next_blk.bytes
-			if next_blk.address in exec_seg.blocks:
-				del exec_seg.blocks[next_blk.address]
+			_absorb_data_block(exec_seg, blk, next_blk)
 		else:
 			break
 		next_blk = exec_seg.blocks.get_next(next_blk)
@@ -206,21 +221,41 @@ def check_block_sizes(exec_seg):
 	"""
 	Analyze the executable segment and log instances where blocks either over or
 	under run. This is useful when debugging block processing to identify
-	missing, duplicate or corrupt data.
+	missing, duplicate or corrupt block data.
 
 	:param exec_seg: The executable segment to analyze the blocks of.
 	:type exec_seg: :py:class:`crimson_forge.segment.ExecutableSegment`
 	"""
 	# use this function when there is a size mismatch to help identify where it is, the faulty blocks are logged
-	for block, next_block in boltons.iterutils.pairwise(exec_seg.blocks.values()):
-		prefix = "{} 0x{:04x} (size: {:,} bytes) ".format(block.__class__.__name__, block.address, block.size)
-		if next_block.address < block.address + block.size:
-			message = "over runs with next block 0x{:04x} ".format(next_block.address)
-		elif next_block.address > block.address + block.size:
-			message = "under runs with next block 0x{:04x} ".format(next_block.address)
+	corrupted = False
+	for blk, next_blk in boltons.iterutils.pairwise(exec_seg.blocks.values()):
+		prefix = "{} 0x{:04x} (size: {:,} bytes) ".format(blk.__class__.__name__, blk.address, blk.size)
+		if next_blk.address < blk.address + blk.size:
+			message = "over runs with next block 0x{:04x} ".format(next_blk.address)
+		elif next_blk.address > blk.address + blk.size:
+			message = "under runs with next block 0x{:04x} ".format(next_blk.address)
 		else:
 			continue
-		logger.error(prefix + message + "(delta: {:+,} bytes)".format(block.address + block.size - next_block.address))
+		corrupted = True
+		logger.error(prefix + message + "(delta: {:+,} bytes)".format(blk.address + blk.size - next_blk.address))
+	if not corrupted:
+		logger.info('all block sizes are correct')
+
+def digraph_data_identification_disjoint(exec_seg):
+	logger.info('Analyzing the graph to identify basic-blocks that are not connected to the entry point')
+	d_graph = exec_seg.blocks.to_digraph()
+	entry_block = exec_seg.blocks[exec_seg.entry_address]
+	descendant_blocks = d_graph.descendants(entry_block)
+	for blk in tuple(exec_seg.blocks.values()):
+		if blk.address not in exec_seg.blocks:
+			continue  # a previous iteration of this loop caused this block to be absorbed
+		if not isinstance(blk, block.BasicBlock):
+			continue
+		if blk.address == entry_block.address:
+			continue
+		if blk in descendant_blocks:
+			continue
+		_basic_to_data_block(exec_seg, blk)
 
 def symexec_data_identification_cfg(exec_seg):
 	# This analysis uses angr to create a control flow graph and then checks for path terminator nodes to identify
@@ -252,6 +287,7 @@ def symexec_data_identification_ret(exec_seg):
 	:param exec_seg: The executable segment to analyze the blocks of.
 	:type exec_seg: :py:class:`crimson_forge.segment.ExecutableSegment`
 	"""
+	logger.info('Using symbolic execution to identify basic-blocks ending in calls that do not return')
 	project = exec_seg.to_angr()
 	for blk in tuple(exec_seg.blocks.values()):
 		if blk.address not in exec_seg.blocks:
@@ -280,6 +316,7 @@ def symexec_data_identification_ret(exec_seg):
 		if simgr.found:
 			continue
 		_basic_to_data_block(exec_seg, blk)
+	digraph_data_identification_disjoint(exec_seg)
 
 def symexec_tainted_self_reference_identification(exec_seg):
 	"""
