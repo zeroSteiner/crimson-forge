@@ -51,12 +51,26 @@ identify the significance of the static offset which will change when
 *Alterations* are applied. Crimson Forge will attempt to identify instances
 where this occurs and will disable *Alterations* altogether to ensure a
 functional output is produced. However, disabling *Alterations* limits the
-capabilities to generate unique binaries.
+capability to generate unique binaries.
 
 **Encoded Payloads:** All encoding modules within the Metasploit Framework
 require the shellcode to be placed in memory with Read, Write and Execute (RWX)
 permissions. This defeats the purpose of Crimson Forge. See also *Tainted
 References*. 
+
+**Overlapping Instructions:** In certain, theoretical scenarios instructions may
+overlap with one another. This would be the case where one instruction jumps or
+calls an address within another instruction. This would cause the block-level
+analysis to be misaligned.
+
+The following example would result in a jump into the body of the move
+instruction resulting in the flow of execution being `jmp $+3, inc eax` rather
+than what is stated.
+
+.. code:: asm
+
+  jmp  $+3
+  mov  eax, 0xc0ff0000
 
 Technical Documentation
 -----------------------
