@@ -102,7 +102,7 @@ class DataBlock(BlockBase):
 	def source_iter(self):
 		yield from source.raw_bytes(self.bytes)
 
-class InstructionsDiGraph(networkx.DiGraph):
+class InstructionsDiGraph(base.DiGraphBase):
 	"""
 	A directed graph plotting individual instructions within a basic block based
 	on their positional constraints.
@@ -171,13 +171,12 @@ class InstructionsDiGraph(networkx.DiGraph):
 	def arch(self):
 		return self._instructions.arch
 
-	def to_graphviz(self):
-		g_graph = graphviz.Digraph()
-		for ins in self.nodes:
-			g_graph.node("0x{0:04x}".format(ins.address), "0x{0:04x} {1}".format(ins.address, ins.source))
-		for parent_ins, child_ins in self.edges:
-			g_graph.edge("0x{0:04x}".format(parent_ins.address), "0x{0:04x}".format(child_ins.address), constraint='true')
-		return g_graph
+	def _graphviz_name(self, ins):
+		return "0x{:04x}".format(ins.address)
+
+	def _graphviz_node_kwargs(self, ins):
+		label = "0x{0:04x} {1}".format(ins.address, ins.source)
+		return dict(label=label)
 
 	def to_instructions(self):
 		instructions = collections.deque()

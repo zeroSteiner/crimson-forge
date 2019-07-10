@@ -44,9 +44,7 @@ import crimson_forge.tailor as tailor
 
 import angr
 import capstone
-import graphviz
 import keystone
-import networkx
 
 logger = logging.getLogger('crimson-forge.segment')
 
@@ -74,7 +72,7 @@ class _InstructionsProxy(base.InstructionsProxy):
 				break
 		raise KeyError('instruction address not found')
 
-class BlocksDiGraph(networkx.DiGraph):
+class BlocksDiGraph(base.DiGraphBase):
 	def __init__(self, blocks, *args, **kwargs):
 		super(BlocksDiGraph, self).__init__(*args, **kwargs)
 		self._blocks = blocks
@@ -85,17 +83,15 @@ class BlocksDiGraph(networkx.DiGraph):
 			for child in blk.children.values():
 				self.add_edge(blk, child)
 
-	def to_graphviz(self):
-		g_graph = graphviz.Digraph()
-		for blk in self.nodes:
-			label = "<<table border=\"0\" cellborder=\"0\" cellspacing=\"1\">"
-			for line in blk.instructions.pp_asm(stream=None).split('\n'):
-				label += "<tr><td align=\"left\">{0}</td></tr>".format(line)
-			label += "</table>>"
-			g_graph.node("0x{:04x}".format(blk.address), label=label, fontname='courier new', shape='rectangle')
-		for parent_blk, child_blk in self.edges:
-			g_graph.edge("0x{:04x}".format(parent_blk.address), "0x{:04x}".format(child_blk.address), constraint='true')
-		return g_graph
+	def _graphviz_name(self, blk):
+		return "0x{:04x}".format(blk.address)
+
+	def _graphviz_node_kwargs(self, blk):
+		label = "<<table border=\"0\" cellborder=\"0\" cellspacing=\"1\">"
+		for line in blk.instructions.pp_asm(stream=None).split('\n'):
+			label += "<tr><td align=\"left\">{0}</td></tr>".format(line)
+		label += "</table>>"
+		return dict(label=label)
 
 class _Blocks(collections.OrderedDict):
 	def for_address(self, address):

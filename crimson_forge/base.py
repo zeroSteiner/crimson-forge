@@ -37,6 +37,9 @@ import sys
 
 import crimson_forge.instruction as instruction
 
+import graphviz
+import networkx
+import networkx.algorithms
 import tabulate
 
 class InstructionsProxy(collections.abc.Mapping):
@@ -139,3 +142,23 @@ class Base(object):
 	@property
 	def size(self):
 		return len(self.bytes)
+
+class DiGraphBase(networkx.DiGraph):
+	def _graphviz_name(self, node):
+		return node
+
+	def _graphviz_node_kwargs(self, node):
+		return {}
+
+	def descendants(self, node):
+		return networkx.algorithms.descendants(self, node)
+
+	def to_graphviz(self):
+		g_graph = graphviz.Digraph()
+		for node in self.nodes:
+			kwargs = {'fontname': 'courier new', 'shape': 'rectangle'}
+			kwargs.update(self._graphviz_node_kwargs(node))
+			g_graph.node(self._graphviz_name(node), **kwargs)
+		for parent_node, child_node in self.edges:
+			g_graph.edge(self._graphviz_name(parent_node), self._graphviz_name(child_node), constraint='true')
+		return g_graph
