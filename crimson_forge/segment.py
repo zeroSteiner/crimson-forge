@@ -46,6 +46,7 @@ import angr
 import capstone
 import graphviz
 import keystone
+import networkx
 
 logger = logging.getLogger('crimson-forge.segment')
 
@@ -73,6 +74,29 @@ class _InstructionsProxy(base.InstructionsProxy):
 				break
 		raise KeyError('instruction address not found')
 
+class BlocksDiGraph(networkx.DiGraph):
+	def __init__(self, blocks, *args, **kwargs):
+		super(BlocksDiGraph, self).__init__(*args, **kwargs)
+		self._blocks = blocks
+		t_blocks = tuple(blk for blk in self._blocks if isinstance(blk, block.BasicBlock))
+
+		self.add_nodes_from(t_blocks)
+		for blk in t_blocks:
+			for child in blk.children.values():
+				self.add_edge(blk, child)
+
+	def to_graphviz(self):
+		g_graph = graphviz.Digraph()
+		for blk in self.nodes:
+			label = "<<table border=\"0\" cellborder=\"0\" cellspacing=\"1\">"
+			for line in blk.instructions.pp_asm(stream=None).split('\n'):
+				label += "<tr><td align=\"left\">{0}</td></tr>".format(line)
+			label += "</table>>"
+			g_graph.node("0x{:04x}".format(blk.address), label=label, fontname='courier new', shape='rectangle')
+		for parent_blk, child_blk in self.edges:
+			g_graph.edge("0x{:04x}".format(parent_blk.address), "0x{:04x}".format(child_blk.address), constraint='true')
+		return g_graph
+
 class _Blocks(collections.OrderedDict):
 	def for_address(self, address):
 		for blk in self.values():
@@ -85,24 +109,8 @@ class _Blocks(collections.OrderedDict):
 			raise TypeError('argument 1 must be a BlockBase instance')
 		return self.get(blk.address + blk.size)
 
-	def to_graphviz(self):
-		graph = graphviz.Digraph()
-		for blk in self.values():
-			if isinstance(blk, block.DataBlock):
-				continue
-			label = "<<table border=\"0\" cellborder=\"0\" cellspacing=\"1\">"
-			for line in blk.instructions.pp_asm(stream=None).split('\n'):
-				label += "<tr><td align=\"left\">'{0}'</td></tr>".format(line)
-			label += "</table>>"
-			graph.node(str(blk.address), label=label, fontname='courier new', shape='rectangle')
-		for blk in self.values():
-			if isinstance(blk, block.DataBlock):
-				continue
-			for child_address in blk.children:
-				if child_address in self:
-					graph.edge(str(blk.address), str(child_address), constraint='true')
-				else:
-					graph.node(str(child_address), "0x:{:04x}".format(child_address), shape='plain')
+	def to_digraph(self):
+		graph = BlocksDiGraph(self.values())
 		return graph
 
 class ExecutableSegment(base.Base):
