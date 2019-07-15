@@ -8,6 +8,7 @@
 .pylintrc
 .python-version
 Pipfile.lock
+debugging.py
 build/*
 data/*.local.*
 data/templates/*/.vs/*

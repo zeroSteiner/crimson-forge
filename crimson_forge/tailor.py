@@ -84,7 +84,7 @@ class SelectorExponentialGrowth(SelectorLinear):
 		return selected
 
 def _is_numeric(string):
-	return re.match(r'^(0x[a-f0-9]+|[0-9]+)$', string, flags=re.IGNORECASE) is not None
+	return re.match(r'^(-?0x[a-f0-9]+|[0-9]+)$', string, flags=re.IGNORECASE) is not None
 
 def _re_match(regex, ins):
 	# this will automatically append source.REGEX_INSTRUCTION_END to terminate the
