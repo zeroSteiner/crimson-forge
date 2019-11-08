@@ -4,21 +4,21 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-archinfo = "==8.19.4.5"
-capstone = "*"
-keystone-engine = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/keystone-engine-0.9.1.post3.zip"}
-networkx = "*"
-pyvex = "*"
-graphviz = "*"
-tabulate = "*"
-termcolor = "*"
-boltons = "*"
-smoke-zephyr = "*"
-lief = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/pylief-0.9.0.dev.zip"}
 angr = "==8.19.4.5"
-bullet = "*"
-jinja2 = "*"
-jinja-vanish = "*"
+archinfo = "==8.19.4.5"
+boltons = "==19.1.0"
+bullet = "==2.1.0"
+capstone = "==4.0.1"
+graphviz = "==0.11"
+jinja-vanish = "==0.1"
+jinja2 = "==2.10.1"
+keystone-engine = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/keystone-engine-0.9.1.post3.zip"}
+lief = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/pylief-0.9.0.dev.zip"}
+networkx = "==2.3"
+pyvex = "==8.19.4.5"
+smoke-zephyr = "==1.4.1"
+tabulate = "==0.8.3"
+termcolor = "==1.1.0"
 
 [dev-packages]
 ipython = "*"
