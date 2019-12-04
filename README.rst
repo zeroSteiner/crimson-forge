@@ -79,3 +79,9 @@ The existing technical documentation of the internal API is able to be built
 with Sphinx. Build the documentation with the following command:
 
   sphinx-build -a -E -v -b html docs/source docs/html
+
+Credits
+-------
+
+Crimson Forge was originally designed and developed by RSM US LLP in Q1 of 2019
+as part of an offensive security research and development initiative.
