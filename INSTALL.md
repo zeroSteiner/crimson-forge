@@ -14,7 +14,7 @@
         * `git`
         * `pipenv`
 1. Clone the repository
-    * `git clone git@github.com:securestate/crimson-forge.git`
+    * `git clone git@github.com:zeroSteiner/crimson-forge.git`
 1. Change directories into the repository
     * `cd crimson-forge`
 1. Install packages with pipenv
