@@ -12,8 +12,8 @@ capstone = "==4.0.1"
 graphviz = "==0.11"
 jinja-vanish = "==0.1"
 jinja2 = "==2.10.1"
-keystone-engine = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/keystone-engine-0.9.1.post3.zip"}
-lief = {file = "https://securestate.nyc3.digitaloceanspaces.com/packages/pylief-0.9.0.dev.zip"}
+keystone-engine = {file = "https://zerosteiner.s3.amazonaws.com/packages/keystone-engine-0.9.1.post3.zip"}
+lief = {file = "https://zerosteiner.s3.amazonaws.com/packages/pylief-0.9.0.dev.zip"}
 networkx = "==2.3"
 pyvex = "==8.19.4.5"
 smoke-zephyr = "==1.4.1"
