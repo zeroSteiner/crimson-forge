@@ -30,38 +30,6 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-#  tools/asssembler.py
-#
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are
-#  met:
-#
-#  * Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-#  * Redistributions in binary form must reproduce the above
-#    copyright notice, this list of conditions and the following disclaimer
-#    in the documentation and/or other materials provided with the
-#    distribution.
-#  * Neither the name of the  nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
-#
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-#  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-#  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-#  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-#  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-#  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-#  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-#  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-#  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-
 import functools
 import os
 import re
@@ -73,6 +41,7 @@ sys.path.append(relpath())
 import crimson_forge.source as source
 import crimson_forge.utilities as utilities
 
+import archinfo
 import jinja_vanish
 import jinja2
 
@@ -100,8 +69,15 @@ def _jinja_bw_or(*values):
 
 def assemble_source(arch, text):
 	text = source.remove_comments(text)
-	# apply this syntax fixup to add 'ptr' to reference operations
-	text = re.sub(r'(\s[dq]?word|byte) \[', r'\1 ptr [', text, flags=re.IGNORECASE)
+
+	if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
+		# apply this syntax fixup to add 'ptr' to reference operations
+		# example: `mov eax, dword [rdx+60]` -> `mov eax, dword ptr [rdx+60]`
+		text = re.sub(r'(\s[dq]?word|byte) \[', r'\1 ptr [', text, flags=re.IGNORECASE)
+		# apply this syntax fixup to move segment selectors outside of brackets
+		# example: `mov rdx, [gs:rdx+96]` -> `mov rdx, gs:[rdx+96]`
+		text = re.sub(r'([\w,]\s*)\[([gs]s):(\s*\w)', r'\1\2:[\3', text, flags=re.IGNORECASE)
+
 	return bytes(arch.keystone.asm(text, 0x1000)[0])
 
 def render_source(arch, text, variables=None):
