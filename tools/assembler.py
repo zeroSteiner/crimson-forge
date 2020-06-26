@@ -33,6 +33,7 @@
 import argparse
 import functools
 import os
+import re
 import sys
 import warnings
 
@@ -71,6 +72,12 @@ def main():
 	text = args.input.read()
 	if args.render:
 		text = assembler.render_source(arch, text)
+
+	match = re.search(r'(^|\s)jmp\.i\d+(\s|$)', text, re.IGNORECASE)
+	if match:
+		printer.print_warning('sized jmp instruction detected (results may not assemble):')
+		lineno = text[:match.span()[0]].count('\n')
+		print(" -> {: >4}: {}".format(lineno + 1, text.split('\n')[lineno]))
 
 	try:
 		assembled = assembler.assemble_source(arch, text)
