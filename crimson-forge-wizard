@@ -30,7 +30,11 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import crimson_forge.wizard as wizard
+import warnings
+
+with warnings.catch_warnings():
+	warnings.simplefilter('ignore')
+	import crimson_forge.wizard as wizard
 
 if __name__ == '__main__':
 	wizard.main()

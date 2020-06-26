@@ -34,14 +34,17 @@ import argparse
 import functools
 import os
 import sys
+import warnings
 
 relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..')
 sys.path.append(relpath())
 
-import crimson_forge
-import crimson_forge.cli as cli
-import crimson_forge.servicizer as servicizer
-import crimson_forge.utilities as utilities
+with warnings.catch_warnings():
+	warnings.simplefilter('ignore')
+	import crimson_forge
+	import crimson_forge.cli as cli
+	import crimson_forge.servicizer as servicizer
+	import crimson_forge.utilities as utilities
 
 import keystone
 

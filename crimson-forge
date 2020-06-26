@@ -30,7 +30,11 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import crimson_forge.cli as cli
+import warnings
+
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore')
+    import crimson_forge.cli as cli
 
 if __name__ == '__main__':
 	cli.main()
