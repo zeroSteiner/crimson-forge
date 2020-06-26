@@ -62,10 +62,9 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import argparse
 import functools
-import hashlib
 import os
+import re
 import sys
 
 relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..')
@@ -101,6 +100,8 @@ def _jinja_bw_or(*values):
 
 def assemble_source(arch, text):
 	text = source.remove_comments(text)
+	# apply this syntax fixup to add 'ptr' to reference operations
+	text = re.sub(r'(\s[dq]?word|byte) \[', r'\1 ptr [', text, flags=re.IGNORECASE)
 	return bytes(arch.keystone.asm(text, 0x1000)[0])
 
 def render_source(arch, text, variables=None):
