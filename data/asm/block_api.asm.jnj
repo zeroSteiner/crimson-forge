@@ -1,0 +1,4 @@
+# assemble with:
+#   tools/assembler.py -a amd64 --output-format source --render data/asm/block_api.asm.jnj /dev/stdout
+{% from arch + '/block_api.asm.jnj' import api_define %}
+{{ api_define() }}
