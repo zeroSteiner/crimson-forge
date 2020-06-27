@@ -332,3 +332,4 @@ def main(args=None, input_data=None, printer=None):
 
 	elapsed = boltons.timeutils.decimal_relative_time(start_time, datetime.datetime.utcnow())
 	printer.print_status("Completed in {0:.3f} {1}".format(*elapsed))
+	return exec_seg
