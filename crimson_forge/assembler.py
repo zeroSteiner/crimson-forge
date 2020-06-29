@@ -67,7 +67,9 @@ def _jinja_bw_or(*values):
 		result |= value
 	return result
 
-def assemble_source(arch, text):
+def assemble_source(arch, text, base=0x1000):
+	if isinstance(text, source.SourceCode):
+		text = str(text)
 	text = source.remove_comments(text)
 
 	if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
@@ -78,7 +80,7 @@ def assemble_source(arch, text):
 		# example: `mov rdx, [gs:rdx+96]` -> `mov rdx, gs:[rdx+96]`
 		text = re.sub(r'([\w,]\s*)\[([gs]s):(\s*\w)', r'\1\2:[\3', text, flags=re.IGNORECASE)
 
-	return bytes(arch.keystone.asm(text, 0x1000)[0])
+	return bytes(arch.keystone.asm(text, base)[0])
 
 def render_source(arch, text, variables=None):
 	environment = jinja_vanish.DynAutoEscapeEnvironment(

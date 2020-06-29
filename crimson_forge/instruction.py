@@ -37,6 +37,7 @@ import logging
 import re
 import sys
 
+import crimson_forge.assembler as assembler
 import crimson_forge.ir as ir
 import crimson_forge.source as source
 
@@ -225,11 +226,11 @@ class Instruction(object):
 	def from_source(cls, text, arch, base=0x1000):
 		text = source.remove_comments(text)
 		try:
-			blob, _ = arch.keystone.asm(text, base)
+			blob = assembler.assemble_source(arch, text, base=base)
 		except keystone.KsError as error:
-			logger.error("Keystone failed to assemble instruction: '{}' at: 0x{:04x}".format(text, base))
+			logger.error("Failed to assemble instruction: '{}' at: 0x{:04x}".format(text, base))
 			raise error
-		return cls.from_bytes(bytes(blob), arch, base=base)
+		return cls.from_bytes(blob, arch, base=base)
 
 	@property
 	def jmp_reference(self):

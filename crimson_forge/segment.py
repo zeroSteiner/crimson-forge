@@ -35,6 +35,7 @@ import collections.abc
 import io
 import logging
 
+import crimson_forge.assembler as assembler
 import crimson_forge.base as base
 import crimson_forge.block as block
 import crimson_forge.ir as ir
@@ -212,10 +213,8 @@ class ExecutableSegment(base.Base):
 	def _permutation_bytes_replacements(self):
 		# if replacing instructions, operate at the source level to use labels
 		src_code = self.permutation_source(replacements=True)
-		exec_seg_src = str(src_code)
-		exec_seg_src = source.remove_comments(exec_seg_src)
 		try:
-			blob = bytes(self.arch.keystone.asm(exec_seg_src, self.address)[0])
+			blob = assembler.assemble_source(self.arch, src_code, base=self.address)
 		except keystone.KsError as error:
 			logger.error('Failed to assemble source, error: ' + error.message)
 			return None
@@ -272,8 +271,8 @@ class ExecutableSegment(base.Base):
 
 	@classmethod
 	def from_source(cls, text, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(source.remove_comments(text), base)
-		return cls(bytes(blob), arch, base=base)
+		blob = assembler.assemble_source(arch, text, base=base)
+		return cls(blob, arch, base=base)
 
 	@classmethod
 	def from_source_file(cls, source_file, *args, **kwargs):

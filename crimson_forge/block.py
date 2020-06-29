@@ -36,13 +36,11 @@ import itertools
 import logging
 import random
 
+import crimson_forge.assembler as assembler
 import crimson_forge.base as base
 import crimson_forge.ir as ir
 import crimson_forge.source as source
 import crimson_forge.ssa as ssa
-
-import graphviz
-import networkx.algorithms
 
 logger = logging.getLogger('crimson-forge.basic-block')
 
@@ -241,8 +239,8 @@ class BasicBlock(BlockBase):
 
 	@classmethod
 	def from_source(cls, text, arch, base=0x1000):
-		blob, _ = arch.keystone.asm(source.remove_comments(text), base)
-		return cls.from_bytes(bytes(blob), arch, base=base)
+		blob = assembler.assemble_source(arch, text, base=base)
+		return cls.from_bytes(blob, arch, base=base)
 
 	@classmethod
 	def from_irsb(cls, blob, cs_instructions, irsb):

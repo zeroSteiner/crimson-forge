@@ -271,7 +271,7 @@ def main(args=None, input_data=None, printer=None):
 
 	analysis_profile = args.analysis_profile
 	arch = architectures[args.arch]
-	printer.print_status('Architecture set as: ' + arch.name)
+	printer.print_status('Architecture set as: ' + arch.name.lower())
 	input_data_length = None
 	if args.input_format is DataFormat.RAW:
 		input_data = input_data or args.input.read()
