@@ -76,9 +76,10 @@ def assemble_source(arch, text, base=0x1000):
 		# apply this syntax fixup to add 'ptr' to reference operations
 		# example: `mov eax, dword [rdx+60]` -> `mov eax, dword ptr [rdx+60]`
 		text = re.sub(r'(\s[dq]?word|byte) \[', r'\1 ptr [', text, flags=re.IGNORECASE)
+
 		# apply this syntax fixup to move segment selectors outside of brackets
 		# example: `mov rdx, [gs:rdx+96]` -> `mov rdx, gs:[rdx+96]`
-		text = re.sub(r'([\w,]\s*)\[([gs]s):(\s*\w)', r'\1\2:[\3', text, flags=re.IGNORECASE)
+		text = re.sub(r'([\w,]\s*)\[([cdefgs]s):(\s*\w)', r'\1\2:[\3', text, flags=re.IGNORECASE)
 
 	return bytes(arch.keystone.asm(text, base)[0])
 
