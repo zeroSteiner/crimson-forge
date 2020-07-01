@@ -169,6 +169,12 @@ class InstructionsDiGraph(base.DiGraphBase):
 	def arch(self):
 		return self._instructions.arch
 
+	def _graphml_id(self, ins):
+		return "instr[0x{:04x}]".format(ins.address)
+
+	def _graphml_node_attributes(self, ins):
+		return {'address': ins.address, 'instr.source': ins.source, 'instr.hex': ins.bytes_hex}
+
 	def _graphviz_name(self, ins):
 		return "0x{:04x}".format(ins.address)
 

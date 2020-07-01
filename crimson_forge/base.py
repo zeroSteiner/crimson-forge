@@ -34,7 +34,9 @@ import binascii
 import collections
 import collections.abc
 import sys
+import xml.etree.ElementTree as ElementTree
 
+import crimson_forge.graphml as graphml
 import crimson_forge.instruction as instruction
 
 import graphviz
@@ -144,6 +146,45 @@ class Base(object):
 		return len(self.bytes)
 
 class DiGraphBase(networkx.DiGraph):
+	def _graphml_id(self, node):
+		return node
+
+	def _graphml_edge_attributes(self, source, target):
+		return {}
+
+	def _graphml_graph_attributes(self):
+		return {}
+
+	def _graphml_node_attributes(self, node):
+		return {}
+
+	def _graphml_graph(self, parent, id_prefix=''):
+		graph = ElementTree.SubElement(parent, 'graph', attrib={'edgedefault': 'directed'})
+		for node in self.nodes:
+			xml_node_id = id_prefix + self._graphml_id(node)
+			element = ElementTree.SubElement(graph, 'node', attrib={'id': xml_node_id})
+			self.__graphml_add_attributes(element, node)
+			if hasattr(node, 'to_digraph'):
+				digraph = node.to_digraph()
+				digraph._graphml_graph(element, id_prefix=xml_node_id + ':')
+		for parent_node, child_node in self.edges:
+			element = ElementTree.SubElement(graph, 'edge', attrib={
+				'source': id_prefix + self._graphml_id(parent_node),
+				'target': id_prefix + self._graphml_id(child_node)
+			})
+			self.__graphml_add_attributes(element, source=parent_node, target=child_node)
+		self.__graphml_add_attributes(graph)
+
+	def __graphml_add_attributes(self, element, *args, **kwargs):
+		attributes = getattr(self, '_graphml_' + element.tag + '_attributes')(*args, **kwargs)
+		if not attributes:
+			return
+		for key, value in attributes.items():
+			if key not in graphml.GRAPHML_ATTRIBUTES:
+				raise ValueError('Invalid GraphML attribute: ' + key)
+			data = ElementTree.SubElement(element, 'data', attrib={'key': key})
+			data.text = graphml.dump_attribute(value)
+
 	def _graphviz_name(self, node):
 		return node
 
@@ -152,6 +193,11 @@ class DiGraphBase(networkx.DiGraph):
 
 	def descendants(self, node):
 		return networkx.algorithms.descendants(self, node)
+
+	def to_graphml(self):
+		parent = graphml.GraphMLElement()
+		self._graphml_graph(parent)
+		return parent
 
 	def to_graphviz(self):
 		g_graph = graphviz.Digraph()
