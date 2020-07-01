@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  tools/analysis/console.py
+#  tools/analysis/graph.py
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are
@@ -31,26 +31,10 @@
 #
 
 import argparse
-import code
 import functools
 import os
 import sys
 import warnings
-
-try:
-	import readline
-	import rlcompleter  # pylint: disable=unused-variable
-except ImportError:
-	has_readline = False
-else:
-	has_readline = True
-
-try:
-	import IPython.terminal.embed
-except ImportError:
-	has_ipython = False
-else:
-	has_ipython = True
 
 relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..', '..')
 sys.path.append(relpath())
@@ -63,19 +47,13 @@ with warnings.catch_warnings():
 
 architectures = utilities.architectures
 
-EPILOG = """\
-Start an interactive analysis console after processing an input binary into an ExecutableSegment. This allows users to
-inspect the result of the analysis without performing any shuffling or alteration operations.
-"""
-
 def main():
 	parser = argparse.ArgumentParser(
 		'crimson-forge',
-		description="Crimson Forge Interactive Analysis Console v{0}".format(crimson_forge.__version__),
+		description="Crimson Forge Constraint Graph Generator v{0}".format(crimson_forge.__version__),
 		conflict_handler='resolve',
 		formatter_class=argparse.RawTextHelpFormatter,
-		fromfile_prefix_chars='@',
-		epilog=EPILOG
+		fromfile_prefix_chars='@'
 	)
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture')
 	parser.add_argument('input', type=argparse.FileType('r'), help='the raw input file')
@@ -88,22 +66,6 @@ def main():
 	forward_args.extend(['--format', 'raw'])
 	forward_args.extend([args.input.name])
 	exec_seg = cli.main(forward_args)
-
-	console_vars = {
-		'crimson_forge': crimson_forge,
-		'exec_seg': exec_seg,
-		'__name__': 'crimson_forge.console'
-	}
-
-	printer.print_status('The executable segment is loaded in \'exec_seg\'')
-	if has_ipython:
-		console = IPython.terminal.embed.InteractiveShellEmbed()
-		console.mainloop(console_vars)
-	else:
-		if has_readline:
-			readline.parse_and_bind('tab: complete')
-		console = code.InteractiveConsole(console_vars)
-		console.interact()
 
 if __name__ == '__main__':
 	main()
