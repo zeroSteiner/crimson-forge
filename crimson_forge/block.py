@@ -173,7 +173,7 @@ class InstructionsDiGraph(base.DiGraphBase):
 		return "instr[0x{:04x}]".format(ins.address)
 
 	def _graphml_node_attributes(self, ins):
-		return {'address': ins.address, 'instr.source': ins.source, 'instr.hex': ins.bytes_hex}
+		return {'address': "0x{:04x}".format(ins.address), 'instr.source': ins.source, 'instr.hex': ins.bytes_hex}
 
 	def _graphviz_name(self, ins):
 		return "0x{:04x}".format(ins.address)

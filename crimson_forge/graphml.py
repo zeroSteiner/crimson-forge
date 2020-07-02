@@ -69,3 +69,6 @@ class GraphMLElement(ElementTree.Element):
 			if meta_attribute.default is not None:
 				default = ElementTree.SubElement(key, 'default')
 				default.text = dump_attribute(meta_attribute.default)
+
+	def __str__(self):
+		return ElementTree.tostring(self, encoding='unicode', xml_declaration=True)

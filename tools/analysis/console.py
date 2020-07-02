@@ -66,6 +66,9 @@ architectures = utilities.architectures
 EPILOG = """\
 Start an interactive analysis console after processing an input binary into an ExecutableSegment. This allows users to
 inspect the result of the analysis without performing any shuffling or alteration operations.
+
+example usage:
+  ./console.py -a x86 block_api.x86.bin
 """
 
 def main():

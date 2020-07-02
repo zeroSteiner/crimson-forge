@@ -88,7 +88,7 @@ class BlocksDiGraph(base.DiGraphBase):
 		return "block[0x{:04x}]".format(blk.address)
 
 	def _graphml_node_attributes(self, blk):
-		return {'address': blk.address}
+		return {'address': "0x{:04x}".format(blk.address)}
 
 	def _graphviz_name(self, blk):
 		return "0x{:04x}".format(blk.address)

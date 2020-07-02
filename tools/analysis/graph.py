@@ -32,9 +32,11 @@
 
 import argparse
 import functools
+import io
 import os
 import sys
 import warnings
+import xml.dom.minidom
 
 relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..', '..')
 sys.path.append(relpath())
@@ -47,16 +49,30 @@ with warnings.catch_warnings():
 
 architectures = utilities.architectures
 
+EPILOG = """\
+graph type choices:
+  graphml   the GraphML format (extension: .graphml)
+  graphviz  the GraphViz DOT format (extension: .gv)
+
+Generate a graph after analyzing the input file.
+
+example usage:
+  ./graph.py -a x86 block_api.x86.bin graphml block_api.x86.graphml
+"""
+
 def main():
 	parser = argparse.ArgumentParser(
 		'crimson-forge',
 		description="Crimson Forge Constraint Graph Generator v{0}".format(crimson_forge.__version__),
 		conflict_handler='resolve',
 		formatter_class=argparse.RawTextHelpFormatter,
-		fromfile_prefix_chars='@'
+		fromfile_prefix_chars='@',
+		epilog=EPILOG
 	)
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture')
 	parser.add_argument('input', type=argparse.FileType('r'), help='the raw input file')
+	parser.add_argument('graph_type', choices=('graphml', 'graphviz'), help='the graph type to write')
+	parser.add_argument('output', nargs='?', default=sys.stdout, type=argparse.FileType('w'), help='the output file')
 
 	args = parser.parse_args()
 	printer = utilities
@@ -66,6 +82,16 @@ def main():
 	forward_args.extend(['--format', 'raw'])
 	forward_args.extend([args.input.name])
 	exec_seg = cli.main(forward_args)
+
+	digraph = exec_seg.blocks.to_digraph()
+	if args.graph_type == 'graphml':
+		graph_text = str(digraph.to_graphml())
+		dom = xml.dom.minidom.parse(io.StringIO(graph_text))
+		graph_text = dom.toprettyxml(indent='  ')
+	elif args.graph_type == 'graphviz':
+		graph_text = digraph.to_graphviz().source
+
+	args.output.write(graph_text)
 
 if __name__ == '__main__':
 	main()

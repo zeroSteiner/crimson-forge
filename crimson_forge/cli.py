@@ -327,8 +327,6 @@ def main(args=None, input_data=None, printer=None):
 		else:
 			printer.print_status('Output length: ' + boltons.strutils.bytes2human(len(output_data)) + ' (correct)')
 		handle_output(args, printer, arch, output_data)
-	else:
-		printer.print_status('No output file specified')
 
 	elapsed = boltons.timeutils.decimal_relative_time(start_time, datetime.datetime.utcnow())
 	printer.print_status("Completed in {0:.3f} {1}".format(*elapsed))
