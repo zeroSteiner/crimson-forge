@@ -160,6 +160,7 @@ class DiGraphBase(networkx.DiGraph):
 
 	def _graphml_graph(self, parent, id_prefix=''):
 		graph = ElementTree.SubElement(parent, 'graph', attrib={'edgedefault': 'directed'})
+		self.__graphml_add_attributes(graph)
 		for node in self.nodes:
 			xml_node_id = id_prefix + self._graphml_id(node)
 			element = ElementTree.SubElement(graph, 'node', attrib={'id': xml_node_id})
@@ -173,7 +174,6 @@ class DiGraphBase(networkx.DiGraph):
 				'target': id_prefix + self._graphml_id(child_node)
 			})
 			self.__graphml_add_attributes(element, source=parent_node, target=child_node)
-		self.__graphml_add_attributes(graph)
 
 	def __graphml_add_attributes(self, element, *args, **kwargs):
 		attributes = getattr(self, '_graphml_' + element.tag + '_attributes')(*args, **kwargs)

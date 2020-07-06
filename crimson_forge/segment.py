@@ -85,10 +85,10 @@ class BlocksDiGraph(base.DiGraphBase):
 				self.add_edge(blk, child)
 
 	def _graphml_id(self, blk):
-		return "block[0x{:04x}]".format(blk.address)
+		return "block.0x{:04x}".format(blk.address)
 
 	def _graphml_node_attributes(self, blk):
-		return {'address': "0x{:04x}".format(blk.address)}
+		return {'address': "0x{:04x}".format(blk.address), 'type': 'block'}
 
 	def _graphviz_name(self, blk):
 		return "0x{:04x}".format(blk.address)

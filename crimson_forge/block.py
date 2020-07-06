@@ -170,10 +170,20 @@ class InstructionsDiGraph(base.DiGraphBase):
 		return self._instructions.arch
 
 	def _graphml_id(self, ins):
-		return "instr[0x{:04x}]".format(ins.address)
+		return "instruction.0x{:04x}".format(ins.address)
+
+	def _graphml_graph_attributes(self):
+		address = next(iter(self._instructions.keys()))  # use the address of the first instruction
+		return {'address': "0x{:04x}".format(address), 'type': 'block'}
 
 	def _graphml_node_attributes(self, ins):
-		return {'address': "0x{:04x}".format(ins.address), 'instr.source': ins.source, 'instr.hex': ins.bytes_hex}
+		attributes = {
+			'address': "0x{:04x}".format(ins.address),
+			'type': 'instruction',
+			'instruction.hex': ins.bytes_hex,
+			'instruction.source': ins.source
+		}
+		return attributes
 
 	def _graphviz_name(self, ins):
 		return "0x{:04x}".format(ins.address)

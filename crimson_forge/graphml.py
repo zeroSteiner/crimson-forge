@@ -42,9 +42,10 @@ class _GraphMLMetaAttribute(object):
 		self.default = default
 
 GRAPHML_ATTRIBUTES = dict((attr.id, attr) for attr in [
-	_GraphMLMetaAttribute('address', type='long', domain='node'),
-	_GraphMLMetaAttribute('instr.source', domain='node'),
-	_GraphMLMetaAttribute('instr.hex', domain='node')
+	_GraphMLMetaAttribute('address', type='long'),
+	_GraphMLMetaAttribute('type'),
+	_GraphMLMetaAttribute('instruction.source', domain='node'),
+	_GraphMLMetaAttribute('instruction.hex', domain='node')
 ])
 
 def dump_attribute(value):
