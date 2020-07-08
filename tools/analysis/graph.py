@@ -77,7 +77,7 @@ def main():
 	args = parser.parse_args()
 	printer = utilities
 
-	forward_args = ['--skip-analysis', '--skip-banner']
+	forward_args = ['--skip-banner']
 	forward_args.extend(['--arch', args.arch])
 	forward_args.extend(['--format', 'raw'])
 	forward_args.extend([args.input.name])
