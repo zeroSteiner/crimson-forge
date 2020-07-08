@@ -72,7 +72,7 @@ def assemble_source(arch, text, base=0x1000):
 		text = str(text)
 	text = source.remove_comments(text)
 
-	if isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
+	if text and isinstance(arch, (archinfo.ArchAMD64, archinfo.ArchX86)):
 		# apply this syntax fixup to add 'ptr' to reference operations
 		# example: `mov eax, dword [rdx+60]` -> `mov eax, dword ptr [rdx+60]`
 		text = re.sub(r'(\s[dq]?word|byte) \[', r'\1 ptr [', text, flags=re.IGNORECASE)
@@ -80,6 +80,11 @@ def assemble_source(arch, text, base=0x1000):
 		# apply this syntax fixup to move segment selectors outside of brackets
 		# example: `mov rdx, [gs:rdx+96]` -> `mov rdx, gs:[rdx+96]`
 		text = re.sub(r'([\w,]\s*)\[([cdefgs]s):(\s*\w)', r'\1\2:[\3', text, flags=re.IGNORECASE)
+
+		# discard the NASM "BITS" directive if it's the first line, see: https://www.nasm.us/xdoc/2.13rc23/html/nasmdoc6.html
+		first_line, _ = text.split('\n', 1)
+		if re.match(r'\s*\[\s*BITS\s+(32|64)\s*\]$', first_line):
+			_, text = text.split('\n', 1)
 
 	return bytes(arch.keystone.asm(text, base)[0])
 

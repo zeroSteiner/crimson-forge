@@ -101,7 +101,7 @@ def remove_comments(text: str, comment_char: str = ';') -> str:
 	"""
 	# todo: this should use a regex incase there is a ';' in the source
 	lines = text.split('\n')
-	return '\n'.join([line.split(comment_char, 1)[0].rstrip() for line in lines])
+	return '\n'.join(filter(None, [line.split(comment_char, 1)[0].rstrip() for line in lines]))
 
 def label_maker(location: int, prefix: str = 'loc', scope: str = '') -> str:
 	"""
