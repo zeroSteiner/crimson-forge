@@ -31,6 +31,7 @@
 #
 
 import collections
+import collections.abc
 import enum
 import logging
 import os
@@ -48,10 +49,27 @@ LEVEL_COLORS = {
 	logging.CRITICAL: ('white', 'on_red')
 }
 
-architectures = {
-	'amd64': archinfo.ArchAMD64(),
-	'x86': archinfo.ArchX86(),
-}
+class _Architectures(collections.abc.Mapping):
+	aliases = {
+		'x64': 'amd64',
+		'x86-64': 'amd64'
+	}
+	__values = collections.OrderedDict((
+		('amd64', archinfo.ArchAMD64()),
+		('x86',  archinfo.ArchX86())
+	))
+	def __getitem__(self, item):
+		item = item.lower()
+		item = self.aliases.get(item, item)
+		return self.__values[item]
+
+	def __iter__(self):
+		return iter(self.__values)
+
+	def __len__(self):
+		return len(self.__values)
+
+architectures = _Architectures()
 
 print_colors = True
 
