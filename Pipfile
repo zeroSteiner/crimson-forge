@@ -11,7 +11,7 @@ bullet = "==2.1.0"
 capstone = "==4.0.1"
 graphviz = "==0.11"
 jinja-vanish = "==0.1"
-jinja2 = "==2.10.1"
+jinja2 = "==2.11.3"
 keystone-engine = {file = "https://zerosteiner.s3.amazonaws.com/packages/keystone-engine-0.9.1.post3.zip"}
 lief = "==0.10.1"
 networkx = "==2.3"
