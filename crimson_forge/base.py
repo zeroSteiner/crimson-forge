@@ -146,6 +146,9 @@ class Base(object):
 		return len(self.bytes)
 
 class DiGraphBase(networkx.DiGraph):
+	def _graph_edges(self):
+		return self.edges
+
 	def _graphml_id(self, node):
 		return node
 
@@ -168,7 +171,7 @@ class DiGraphBase(networkx.DiGraph):
 			if hasattr(node, 'to_digraph'):
 				digraph = node.to_digraph()
 				digraph._graphml_graph(element, id_prefix=xml_node_id + ':')
-		for parent_node, child_node in self.edges:
+		for parent_node, child_node in self._graph_edges():
 			element = ElementTree.SubElement(graph, 'edge', attrib={
 				'source': id_prefix + self._graphml_id(parent_node),
 				'target': id_prefix + self._graphml_id(child_node)

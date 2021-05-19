@@ -44,6 +44,7 @@ import crimson_forge.ssa as ssa
 import crimson_forge.tailor as tailor
 
 import angr
+import boltons.iterutils
 import capstone
 import keystone
 
@@ -78,11 +79,15 @@ class BlocksDiGraph(base.DiGraphBase):
 		super(BlocksDiGraph, self).__init__(*args, **kwargs)
 		self._blocks = blocks
 		t_blocks = tuple(blk for blk in self._blocks if isinstance(blk, block.BasicBlock))
-
 		self.add_nodes_from(t_blocks)
 		for blk in t_blocks:
 			for child in blk.children.values():
 				self.add_edge(blk, child)
+
+	def _graph_edges(self):
+		# override this because block-edges are flow directions and not positional constraints like they are in other
+		# digraphs
+		return boltons.iterutils.pairwise(sorted(self.nodes, key=lambda block: block.address))
 
 	def _graphml_id(self, blk):
 		return "block.0x{:04x}".format(blk.address)
