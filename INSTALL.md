@@ -2,17 +2,17 @@
 
 ## Supported Operating Systems
 
-* Fedora 29
-* Kali 2019.1
+* Fedora 32
 
 ## Installation Instructions
 
 1. Install prerequisites
-    * Python v3.6+
+    * Python v3.8+
     * Additional OS packages
         * `cmake`
         * `git`
         * `pipenv`
+        * `z3-libs`
 1. Clone the repository
     * `git clone git@github.com:zeroSteiner/crimson-forge.git`
 1. Change directories into the repository

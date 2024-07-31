@@ -19,6 +19,9 @@ pyvex = "==8.19.4.5"
 smoke-zephyr = "==1.4.1"
 tabulate = "==0.8.3"
 termcolor = "==1.1.0"
+markupsafe = "==0.23"
+six = "*"
+z3-solver = "==4.5.1.0.post2"
 
 [dev-packages]
 ipython = "*"
@@ -32,3 +35,6 @@ sphinx-autodoc-typehints = "*"
 crimson-forge = "python -m crimson_forge"
 metasploit = "python -m crimson_forge.metasploit"
 wizard = "python -m crimson_forge.wizard"
+
+[requires]
+python_version = "3.8"

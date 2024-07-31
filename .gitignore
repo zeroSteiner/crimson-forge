@@ -1,3 +1,6 @@
+*.asm
+*.bin
+*.graphml
 *.gv
 *.ods
 *.ods#
@@ -7,7 +10,6 @@
 
 .pylintrc
 .python-version
-Pipfile.lock
 debugging.py
 build/*
 data/*.local.*
