@@ -4,8 +4,8 @@ FROM registry.fedoraproject.org/fedora:32
 USER root
 
 # install dependencies
-RUN dnf install --assumeyes cmake pipenv python wget z3-libs
+RUN dnf install --assumeyes cmake git pipenv python wget z3-libs
 
 WORKDIR /opt/crimson-forge
 COPY .  .
-RUN pipenv install --system 
+RUN pipenv install --system && git clean --force -dx
