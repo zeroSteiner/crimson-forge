@@ -12,9 +12,9 @@ capstone = "==4.0.1"
 graphviz = "==0.11"
 jinja-vanish = "==0.1"
 jinja2 = "==2.10.1"
-keystone-engine = {file = "https://zerosteiner.s3.amazonaws.com/packages/keystone-engine-0.9.1.post3.zip"}
-lief = "==0.10.1"
-networkx = "==2.3"
+keystone-engine = "==0.9.2"
+lief = "==0.11.5"
+networkx = "==2.7"
 pyvex = "==8.19.4.5"
 smoke-zephyr = "==1.4.1"
 tabulate = "==0.8.3"
@@ -37,4 +37,4 @@ metasploit = "python -m crimson_forge.metasploit"
 wizard = "python -m crimson_forge.wizard"
 
 [requires]
-python_version = "3.8"
+python_version = "3.9"
