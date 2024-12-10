@@ -1,6 +1,6 @@
 # podman build -t crimson-forge .
 # podman run --rm -v $(pwd):/opt/crimson-forge -ti crimson-forge:latest /bin/bash
-FROM registry.fedoraproject.org/fedora:34
+FROM registry.fedoraproject.org/fedora:36
 USER root
 
 # install dependencies
