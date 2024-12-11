@@ -34,7 +34,6 @@ import argparse
 import binascii
 import bz2
 import datetime
-import distutils.version
 import hashlib
 import json
 import logging
@@ -50,6 +49,7 @@ logger = logging.getLogger('crimson-forge.catalog')
 
 data_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
 
+# _load_catalog assumes this is X.Y with no additional components (e.g. X.Y.Z)
 schema_version = '1.0'
 
 # https://www.alvestrand.no/objectid/2.5.4.html
@@ -72,15 +72,16 @@ def _binary_data(data, key: str):
 def _load_catalog(catalog_path):
 	with open(catalog_path, 'r') as file_h:
 		catalog = json.load(file_h)
-	version = catalog.get('schema-version', '0.0')
+
+	parse_version = lambda version_string: tuple(map(int, version_string.split('.')))
+	version = parse_version(catalog.get('schema-version', '0.0'))
+	schema_major_version, schema_minor_version = parse_version(schema_version)
+
 	compatible = True
-	if distutils.version.StrictVersion(version) < distutils.version.StrictVersion(schema_version):
+	if version < (schema_major_version, schema_minor_version):
 		compatible = False
-	else:
-		major, minor = schema_version.split('.')
-		next_schema_version = str(int(major) + 1) + '.' + minor
-		if distutils.version.StrictVersion(version) >= distutils.version.StrictVersion(next_schema_version):
-			compatible = False
+	elif version >= (schema_major_version + 1, schema_minor_version):
+		compatible = False
 	return catalog, compatible
 
 def _process_entry(entry: dict, recursive: bool=True) -> dict:
