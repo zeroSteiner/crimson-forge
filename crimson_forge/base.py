@@ -147,7 +147,7 @@ class Base(object):
 
 class DiGraphBase(networkx.DiGraph):
 	def _graph_edges(self):
-		return self.edges
+		yield from sorted(self.edges, key=lambda nodes: (nodes[0].address, nodes[1].address))
 
 	def _graphml_id(self, node):
 		return node
@@ -164,7 +164,7 @@ class DiGraphBase(networkx.DiGraph):
 	def _graphml_graph(self, parent, id_prefix=''):
 		graph = ElementTree.SubElement(parent, 'graph', attrib={'edgedefault': 'directed'})
 		self.__graphml_add_attributes(graph)
-		for node in self.nodes:
+		for node in sorted(self.nodes, key=lambda node: node.address):
 			xml_node_id = id_prefix + self._graphml_id(node)
 			element = ElementTree.SubElement(graph, 'node', attrib={'id': xml_node_id})
 			self.__graphml_add_attributes(element, node)
