@@ -50,6 +50,11 @@ import keystone
 
 logger = logging.getLogger('crimson-forge.segment')
 
+class NamedBytesIO(io.BytesIO):
+	def __init__(self, name, *args, **kwargs):
+		self.name = name
+		super().__init__(*args, **kwargs)
+
 def _irsb_jumps(irsb):
 	jumps = collections.deque()
 	for _, _, stmt in irsb.exit_statements:
@@ -337,12 +342,11 @@ class ExecutableSegment(base.Base):
 			'arch': self.arch,
 			'backend': 'blob',
 			'base_addr': self.base,
-			'entry_point': self.base,
-			'filename': 'crimson-forge.bin'
+			'entry_point': self.base
 		}
 		if main_opts is not None:
 			opts.update(main_opts)
-		project = angr.Project(io.BytesIO(self.bytes), arch=self.arch, main_opts=opts, **kwargs)
+		project = angr.Project(NamedBytesIO('crimson-forge.bin', self.bytes), arch=self.arch, main_opts=opts, **kwargs)
 		return project
 
 	def to_source(self):
