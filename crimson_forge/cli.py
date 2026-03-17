@@ -80,7 +80,7 @@ data format choices:
 
 DataFormat = crimson_forge.utilities.DataFormat
 architectures = crimson_forge.utilities.architectures
-logger = logging.getLogger('crimson-forge.cli')
+logger = logging.getLogger(__name__)
 
 @enum.unique
 class AnalysisProfile(enum.Enum):
@@ -238,7 +238,7 @@ def main(args=None, input_data=None, printer=None):
 
 	log_group = parser.add_argument_group('logging options')
 	log_group.add_argument('--log-level', default=logging.WARNING, choices=('DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'), help='set the log level')
-	log_group.add_argument('--log-name', default='crimson-forge', help='specify the root logger')
+	log_group.add_argument('--log-name', default='crimson_forge', help='specify the root logger')
 
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture (amd64 or x86, default: x86)')
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format (see: data format choices)')

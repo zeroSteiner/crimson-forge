@@ -48,7 +48,7 @@ import boltons.iterutils
 import capstone
 import keystone
 
-logger = logging.getLogger('crimson-forge.segment')
+logger = logging.getLogger(__name__)
 
 class NamedBytesIO(io.BytesIO):
 	def __init__(self, name, *args, **kwargs):
@@ -132,6 +132,7 @@ class _Blocks(collections.OrderedDict):
 		return graph
 
 class ExecutableSegment(base.Base):
+	logger = logging.getLogger(f"{__name__}.ExecutableSegment")
 	def __init__(self, blob, arch, base=0x1000):
 		super(ExecutableSegment, self).__init__(blob, arch, base)
 		self.entry_address = self.address
@@ -314,6 +315,7 @@ class ExecutableSegment(base.Base):
 		for blk in self.blocks.values():
 			if not isinstance(blk, block.BasicBlock):
 				continue
+			self.logger.debug(f"Checking permutation count for block at 0x{blk.address:04x}")
 			count *= blk.permutation_count()
 		return count
 

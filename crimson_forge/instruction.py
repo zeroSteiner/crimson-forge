@@ -45,7 +45,7 @@ import archinfo
 import keystone
 import pyvex
 
-logger = logging.getLogger('crimson-forge.instruction')
+logger = logging.getLogger(__name__)
 
 class TaintTrackingError(RuntimeError):
 	pass

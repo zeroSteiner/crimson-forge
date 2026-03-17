@@ -42,7 +42,7 @@ import crimson_forge.ir as ir
 import crimson_forge.source as source
 import crimson_forge.ssa as ssa
 
-logger = logging.getLogger('crimson-forge.basic-block')
+logger = logging.getLogger(__name__)
 
 def _path_choice_iterator(choices):
 	for choice in sorted(choices, key=lambda ins: ins.address):

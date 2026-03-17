@@ -33,10 +33,13 @@
 import argparse
 import functools
 import io
+import logging
 import os
 import sys
 import warnings
 import xml.dom.minidom
+
+import smoke_zephyr.utilities
 
 relpath = functools.partial(os.path.join, os.path.dirname(os.path.realpath(__file__)), '..', '..')
 sys.path.append(relpath())
@@ -74,8 +77,16 @@ def main():
 	parser.add_argument('graph_type', choices=('graphml', 'graphviz'), help='the graph type to write')
 	parser.add_argument('output', nargs='?', default=sys.stdout, type=argparse.FileType('w'), help='the output file')
 
+	log_group = parser.add_argument_group('logging options')
+	log_group.add_argument('--log-level', default=logging.WARNING, choices=('DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'), help='set the log level')
+	log_group.add_argument('--log-name', default='crimson_forge', help='specify the root logger')
+
 	args = parser.parse_args()
-	printer = utilities
+	smoke_zephyr.utilities.configure_stream_logger(
+		logger=args.log_name,
+		level=args.log_level,
+		formatter=crimson_forge.utilities.ColoredLogFormatter('%(levelname)s [%(name)s] %(message)s')
+	)
 
 	forward_args = ['--skip-banner']
 	forward_args.extend(['--arch', args.arch])

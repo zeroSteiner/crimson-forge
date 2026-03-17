@@ -46,7 +46,7 @@ import crimson_forge.source as source
 import archinfo
 import boltons.iterutils
 
-logger = logging.getLogger('crimson-forge.tailor')
+logger = logging.getLogger(__name__)
 
 _SIZES = {64: 'qword', 32: 'dword', 16: 'word', 8: 'byte'}
 

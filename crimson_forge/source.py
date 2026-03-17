@@ -39,7 +39,7 @@ import re
 import archinfo
 import boltons.iterutils
 
-logger = logging.getLogger('crimson-forge.source')
+logger = logging.getLogger(__name__)
 
 REGEX_INSTRUCTION_END = r'(\s+;(?P<comment>.*))?$'
 

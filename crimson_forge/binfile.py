@@ -36,7 +36,7 @@ import os
 import archinfo
 import lief
 
-logger = logging.getLogger('crimson-forge.binfile')
+logger = logging.getLogger(__name__)
 
 template_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'templates'))
 

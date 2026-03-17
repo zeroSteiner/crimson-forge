@@ -42,7 +42,7 @@ import crimson_forge.ir as ir
 import angr
 import boltons.iterutils
 
-logger = logging.getLogger('crimson-forge.analysis')
+logger = logging.getLogger(__name__)
 
 def _absorb_data_block(exec_seg, parent_blk, child_blk):
 	# child_blk is the block to absorb into the parent_blk

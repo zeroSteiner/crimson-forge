@@ -45,7 +45,7 @@ import crimson_forge.utilities
 
 import lief
 
-logger = logging.getLogger('crimson-forge.catalog')
+logger = logging.getLogger(__name__)
 
 data_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
 
