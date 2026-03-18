@@ -198,7 +198,12 @@ class AppendOverrideDefaultAction(argparse.Action):
 			self.reset_dest = False
 		getattr(namespace, self.dest).append(value)
 
-def add_output_arguments(parser, required=False):
+def add_logging_arguments(parser) -> None:
+	log_group = parser.add_argument_group('logging options')
+	log_group.add_argument('--log-level', default=logging.WARNING, choices=('DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'), help='set the log level')
+	log_group.add_argument('--log-name', default='crimson_forge', help='specify the root logger')
+
+def add_output_arguments(parser, required=False) -> None:
 	output_group = parser.add_argument_group('output options')
 	output_group.add_argument(
 		'--output-format',
@@ -222,6 +227,11 @@ def add_output_arguments(parser, required=False):
 		help='the optional output file'
 	)
 
+def add_step_arguments(parser) -> None:
+	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
+	parser.add_argument('--skip-banner', dest='show_banner', default=True, action='store_false', help='skip printing the banner')
+	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
+
 def main(args=None, input_data=None, printer=None):
 	start_time = datetime.datetime.utcnow()
 	parser = argparse.ArgumentParser(
@@ -236,9 +246,7 @@ def main(args=None, input_data=None, printer=None):
 	gc_group.add_argument('--gc-debug-leak', action='store_const', const=gc.DEBUG_LEAK, default=0, help='set the DEBUG_LEAK flag')
 	gc_group.add_argument('--gc-debug-stats', action='store_const', const=gc.DEBUG_STATS, default=0, help='set the DEBUG_STATS flag')
 
-	log_group = parser.add_argument_group('logging options')
-	log_group.add_argument('--log-level', default=logging.WARNING, choices=('DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'), help='set the log level')
-	log_group.add_argument('--log-name', default='crimson_forge', help='specify the root logger')
+	add_logging_arguments(parser)
 
 	parser.add_argument('-a', '--arch', dest='arch', default='x86', metavar='value', choices=architectures.keys(), help='the architecture (amd64 or x86, default: x86)')
 	parser.add_argument('-f', '--format', dest='input_format', default=DataFormat.RAW, metavar='FORMAT', type=argtype_data_format, help='the input format (see: data format choices)')
@@ -246,9 +254,8 @@ def main(args=None, input_data=None, printer=None):
 	parser.add_argument('--analysis-profile', dest='analysis_profile', default=None, metavar='PROFILE', type=argtype_analysis_profile, help='the analysis profile to use (see: analysis profile choices)')
 	parser.add_argument('--prng-seed', dest='prng_seed', default=os.getenv('CF_PRNG_SEED', None), metavar='VALUE', type=int, help='the prng seed')
 
-	parser.add_argument('--skip-analysis', dest='analyze', default=True, action='store_false', help='skip the analysis phase')
-	parser.add_argument('--skip-banner', dest='show_banner', default=True, action='store_false', help='skip printing the banner')
-	parser.add_argument('--skip-permutation', dest='permutation', default=True, action='store_false', help='skip the permutation generation phase')
+	add_step_arguments(parser)
+
 	if input_data is None:
 		parser.add_argument('input', type=argparse.FileType('rb'), help='the input file')
 	add_output_arguments(parser)
@@ -309,7 +316,7 @@ def main(args=None, input_data=None, printer=None):
 
 	instruction_count = len(exec_seg.instructions)
 	printer.print_status("Total instructions: {0:,}".format(instruction_count))
-	if args.analyze:
+	if False:# args.analyze:
 		permutation_count = exec_seg.permutation_count()
 		printer.print_status("Possible permutations: {0:,}".format(permutation_count))
 		score = math.log(permutation_count, math.factorial(instruction_count))

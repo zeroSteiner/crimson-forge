@@ -50,29 +50,41 @@ def _path_choice_iterator(choices):
 		yield choice
 		choices.add(choice)
 
-def _path_recursor(constraints, selection, choices, current_path=None):
+def _path_recursor(constraints, selection, choices, current_path=None, max_paths=float('inf')):
+	if current_path is None:
+		current_path_str = '[ ]'
+	else:
+		current_path_str = '[ '
+		for node in list(current_path)[:-1]:
+			current_path_str += f"0x{node.address:04x} -> "
+		current_path_str += f"0x{current_path[-1].address:04x} ]"
+	logger.debug(f"Recursing with selected block at 0x{selection.address:04x}, current path: {current_path_str}")
 	all_paths = collections.deque()
 	if current_path is None:
 		current_path = collections.deque()
 	current_path.append(selection)
 	# analyze the nodes which are successors (dependants) of the selection
 	for successor in constraints.successors(selection):
-		# skip the node if it's already been added
+		# skip the node if it has already been added
 		if successor in current_path:
 			continue
-		# or if all of it's predecessors (dependencies) have not been met
+		# or if all of its predecessors (dependencies) have not been met
 		if not all(predecessor in current_path for predecessor in constraints.predecessors(successor)):
 			continue
 		choices.add(successor)
 	if choices:
 		for choice in _path_choice_iterator(choices):
-			all_paths.extend(_path_recursor(constraints, choice, choices.copy(), current_path=current_path))
+			all_paths.extend(_path_recursor(constraints, choice, choices.copy(), current_path=current_path, max_paths=max_paths))
+			if len(all_paths) >= max_paths:
+				break
 	else:
 		all_paths.append(current_path.copy())
 	current_path.pop()
 	return all_paths
 
-def path_permutations(constraints):
+def path_permutations(constraints, max_paths=float('inf')):
+	logger.debug(f"Generating path permutations for {len(constraints)} constraints")
+	breakpoint()
 	# the initial choices are any node without a predecessor (dependency)
 	choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
 	all_paths = collections.deque()
