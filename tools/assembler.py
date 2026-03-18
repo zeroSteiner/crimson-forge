@@ -45,6 +45,7 @@ with warnings.catch_warnings():
 	import crimson_forge
 	import crimson_forge.assembler as assembler
 	import crimson_forge.cli as cli
+	import crimson_forge.source as source
 	import crimson_forge.utilities as utilities
 
 import keystone
@@ -72,6 +73,8 @@ def main():
 	text = args.input.read()
 	if args.render:
 		text = assembler.render_source(arch, text)
+	else:
+		text = source.remove_comments(text)
 
 	match = re.search(r'(^|\s)jmp\.i\d+(\s|$)', text, re.IGNORECASE)
 	if match:
