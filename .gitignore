@@ -25,3 +25,6 @@ files/*
 # ignore jupyter notebooks
 .ipynb_checkpoints/*
 *.ipynb
+
+# uv / virtualenv
+.venv/
