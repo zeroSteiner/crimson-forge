@@ -84,12 +84,11 @@ def _path_recursor(constraints, selection, choices, current_path=None, max_paths
 
 def path_permutations(constraints, max_paths=float('inf')):
 	logger.debug(f"Generating path permutations for {len(constraints)} constraints")
-	breakpoint()
 	# the initial choices are any node without a predecessor (dependency)
 	choices = set(node for node in constraints.nodes if len(tuple(constraints.predecessors(node))) == 0)
 	all_paths = collections.deque()
 	for choice in _path_choice_iterator(choices):
-		all_paths.extend(_path_recursor(constraints, choice, choices.copy()))
+		all_paths.extend(_path_recursor(constraints, choice, choices.copy(), max_paths=max_paths))
 	return all_paths
 
 class _InstructionsProxy(base.InstructionsProxy):
