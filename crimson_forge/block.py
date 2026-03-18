@@ -130,7 +130,8 @@ class InstructionsDiGraph(base.DiGraphBase):
 		constraints = collections.defaultdict(collections.deque)
 		for idx, ins in enumerate(t_instructions):
 			for reg in (ins.registers.accessed | ins.registers.stored):
-				# for each accessed register, we search backwards to find when it was set
+				# RAW (read-after-write): for each accessed register, search backwards to find
+				# the instruction that last wrote it — this instruction depends on that writer
 				for pos in reversed(range(0, idx)):
 					o_ins = t_instructions[pos]
 					if reg == ins_ptr:
@@ -141,11 +142,23 @@ class InstructionsDiGraph(base.DiGraphBase):
 						constraints[ins].append(o_ins)
 						break
 
+				# WAR (write-after-read): find the next instruction that writes this register —
+				# it must come after this instruction to avoid clobbering the value before it is read
 				for pos in range(idx + 1, len(t_instructions)):
 					o_ins = t_instructions[pos]
 					if reg == ins_ptr:
 						constraints[o_ins].append(ins)
 					elif o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
+						constraints[o_ins].append(ins)
+						break
+
+		for idx, ins in enumerate(t_instructions):
+			# WAW (write-after-write / output dependency): if a later instruction also modifies this register, it must
+			# come after this instruction to preserve the correct value for any downstream reader
+			for reg in ins.registers.modified:
+				for pos in range(idx + 1, len(t_instructions)):
+					o_ins = t_instructions[pos]
+					if o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
 						constraints[o_ins].append(ins)
 						break
 
