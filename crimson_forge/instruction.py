@@ -266,17 +266,7 @@ class Instruction(object):
 	def pp_ir(self, stream='stdout'):
 		formatted = collections.deque()
 		for stmt in self.vex_statements:
-			if isinstance(stmt, pyvex.stmt.Put):
-				reg_name = self.arch.translate_register_name(stmt.offset, stmt.data.result_size(self._ir_tyenv) // self.arch.byte_width)
-				stmt_str = stmt.__str__(reg_name=reg_name)
-			elif isinstance(stmt, pyvex.stmt.WrTmp) and isinstance(stmt.data, pyvex.expr.Get):
-				reg_name = self.arch.translate_register_name(stmt.data.offset, stmt.data.result_size(self._ir_tyenv) // self.arch.byte_width)
-				stmt_str = stmt.__str__(reg_name=reg_name)
-			elif isinstance(stmt, pyvex.stmt.Exit):
-				reg_name = self.arch.translate_register_name(stmt.offsIP, self.arch.bits // self.arch.byte_width)
-				stmt_str = stmt.__str__(reg_name=reg_name)
-			else:
-				stmt_str = stmt.__str__()
+			stmt_str = stmt.__str__()
 			formatted.append(stmt_str)
 		formatted = '\n'.join(formatted)
 		if stream is not None:
