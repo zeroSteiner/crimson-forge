@@ -100,7 +100,7 @@ metadata = {
 	},
 	'targets': [dict(name=name, **value) for name, value in targets.items()],
 	'references': [
-		{'type': 'URL', 'ref': 'https://github.com/securestate/crimson-forge'}
+		{'type': 'URL', 'ref': 'https://github.com/zeroSteiner/crimson-forge'}
 	]
 }
 

@@ -30,7 +30,7 @@ release = version
 
 # -- General configuration ---------------------------------------------------
 GITHUB_BRANCH = 'master'
-GITHUB_REPO = 'securestate/crimson-forge'
+GITHUB_REPO = 'zeroSteiner/crimson-forge'
 add_module_names = False
 
 extensions = [

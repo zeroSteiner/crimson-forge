@@ -1,4 +1,4 @@
-.. image:: https://github.com/securestate/crimson-forge/blob/master/data/crimson-forge-logo.png
+.. image:: https://github.com/zeroSteiner/crimson-forge/blob/master/data/crimson-forge-logo.png
 
 Crimson Forge
 =============
