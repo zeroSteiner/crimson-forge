@@ -82,9 +82,10 @@ def assemble_source(arch, text, base=0x1000):
 		text = re.sub(r'([\w,]\s*)\[([cdefgs]s):(\s*\w)', r'\1\2:[\3', text, flags=re.IGNORECASE)
 
 		# discard the NASM "BITS" directive if it's the first line, see: https://www.nasm.us/xdoc/2.13rc23/html/nasmdoc6.html
-		first_line, _ = text.split('\n', 1)
-		if re.match(r'\s*\[\s*BITS\s+(32|64)\s*\]$', first_line):
-			_, text = text.split('\n', 1)
+		if '\n' in text:
+			first_line, _ = text.split('\n', 1)
+			if re.match(r'\s*\[\s*BITS\s+(32|64)\s*\]$', first_line):
+				_, text = text.split('\n', 1)
 
 	return bytes(arch.keystone.asm(text, base)[0])
 
