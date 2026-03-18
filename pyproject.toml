@@ -33,6 +33,7 @@ crimson-forge-wizard = "crimson_forge.wizard:main"
 
 [dependency-groups]
 dev = [
+    "invoke",
     "ipython",
     "ipdb",
     "jupyter",

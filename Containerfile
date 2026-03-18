@@ -6,8 +6,8 @@ USER root
 # install dependencies
 RUN dnf install --assumeyes cmake git python uv wget z3-libs
 
-ENV UV_PROJECT_ENVIRONMENT=/opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+ENV UV_PROJECT_ENVIRONMENT=/opt/crimson-forge.venv
+ENV PATH="/opt/crimson-forge.venv/bin:$PATH"
 
 WORKDIR /opt/crimson-forge
 COPY .  .
