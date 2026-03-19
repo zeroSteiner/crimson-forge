@@ -34,6 +34,7 @@ import collections
 import collections.abc
 import io
 import logging
+import xml.sax.saxutils as saxutils
 
 import crimson_forge.assembler as assembler
 import crimson_forge.base as base
@@ -42,6 +43,7 @@ import crimson_forge.ir as ir
 import crimson_forge.source as source
 import crimson_forge.ssa as ssa
 import crimson_forge.tailor as tailor
+import crimson_forge.utilities as utilities
 
 import angr
 import boltons.iterutils
@@ -80,14 +82,15 @@ class _InstructionsProxy(base.InstructionsProxy):
 		raise KeyError('instruction address not found')
 
 class BlocksDiGraph(base.DiGraphBase):
+	"""Block graph with direction based on execution flow."""
 	def __init__(self, blocks, *args, **kwargs):
 		super(BlocksDiGraph, self).__init__(*args, **kwargs)
 		self._blocks = blocks
-		t_blocks = tuple(blk for blk in self._blocks if isinstance(blk, block.BasicBlock))
-		self.add_nodes_from(t_blocks)
-		for blk in t_blocks:
-			for child in blk.children.values():
-				self.add_edge(blk, child)
+		self.add_nodes_from(blocks)
+		for blk in blocks:
+			if isinstance(blk, block.BasicBlock):
+				for child in blk.children.values():
+					self.add_edge(blk, child)
 
 	def _graph_edges(self):
 		# override this because block-edges are flow directions and not positional constraints like they are in other
@@ -105,8 +108,14 @@ class BlocksDiGraph(base.DiGraphBase):
 
 	def _graphviz_node_kwargs(self, blk):
 		label = "<<table border=\"0\" cellborder=\"0\" cellspacing=\"1\">"
-		for line in blk.instructions.pp_asm(stream=None).split('\n'):
-			label += "<tr><td align=\"left\">{0}</td></tr>".format(line)
+		if isinstance(blk, block.BasicBlock):
+			lines = blk.instructions.pp_asm(stream=None).split('\n')
+		elif isinstance(blk, block.DataBlock):
+			lines = utilities.hexdump(blk.bytes, width=8, offset=blk.address, stream=None)
+		else:
+			lines = [ repr(blk) ]
+		for line in lines:
+			label += f"<tr><td align=\"left\">{saxutils.escape(line)}</td></tr>"
 		label += "</table>>"
 		return dict(label=label)
 

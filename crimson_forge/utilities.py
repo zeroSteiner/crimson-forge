@@ -182,3 +182,31 @@ class DataFormat(enum.Enum):
 				if file_h.read(2) != b'MZ':
 					format = cls.RAW
 		return format
+
+def hexdump(data, *, width=16, offset=0, stream='stdout'):
+	lines = []
+	for i in range(0, len(data), width):
+		chunk = data[i:i + width]
+
+		# Hex bytes
+		hex_bytes = ' '.join(f'{b:02x}' for b in chunk)
+
+		# ASCII representation
+		ascii_part = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
+
+		# Build line depending on offset behavior
+		if offset is None:
+			formatted = f"{hex_bytes:<{width*3}}  {ascii_part}"
+		else:
+			formatted = f"0x{offset + i:04x}  {hex_bytes:<{width*3}}  {ascii_part}"
+
+		lines.append(formatted)
+
+		# Stream handling (same pattern as your example)
+		if stream is not None:
+			out_stream = stream
+			if isinstance(stream, str) and stream.lower() in ('stderr', 'stdout'):
+				out_stream = getattr(sys, stream.lower())
+			print(formatted, file=out_stream)
+
+	return lines
