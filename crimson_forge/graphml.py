@@ -45,7 +45,8 @@ GRAPHML_ATTRIBUTES = dict((attr.id, attr) for attr in [
 	_GraphMLMetaAttribute('address', type='long'),
 	_GraphMLMetaAttribute('type'),
 	_GraphMLMetaAttribute('instruction.source', domain='node'),
-	_GraphMLMetaAttribute('instruction.hex', domain='node')
+	_GraphMLMetaAttribute('instruction.hex', domain='node'),
+	_GraphMLMetaAttribute('data.hex', domain='node')
 ])
 
 def dump_attribute(value):

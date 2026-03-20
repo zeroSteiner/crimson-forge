@@ -101,7 +101,13 @@ class BlocksDiGraph(base.DiGraphBase):
 		return "block.0x{:04x}".format(blk.address)
 
 	def _graphml_node_attributes(self, blk):
-		return {'address': "0x{:04x}".format(blk.address), 'type': 'block'}
+		attributes = {'address': "0x{:04x}".format(blk.address)}
+		if isinstance(blk, block.BasicBlock):
+			attributes['type'] = 'block'
+		elif isinstance(blk, block.DataBlock):
+			attributes['type'] = 'data'
+			attributes['data.hex'] = blk.bytes_hex.decode()
+		return attributes
 
 	def _graphviz_name(self, blk):
 		return "0x{:04x}".format(blk.address)
