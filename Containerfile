@@ -10,5 +10,7 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/crimson-forge.venv
 ENV PATH="/opt/crimson-forge.venv/bin:$PATH"
 
 WORKDIR /opt/crimson-forge
-COPY .  .
-RUN uv sync && git clean --force -dx
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-install-project
+
+COPY . .
