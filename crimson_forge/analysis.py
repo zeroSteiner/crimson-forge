@@ -315,6 +315,25 @@ def symexec_data_identification_ret(exec_seg):
 
 		if simgr.found:
 			continue
+
+		# Check if any unconstrained/deadended states still have blk.address as the return address on the  stack. This
+		# handles trampolines (e.g., `jmp r11`) that delegate to external code which returns  via `ret` — the callee
+		# never explicitly returns but also never consumes the return address.
+		potentially_returning = False
+		logger.debug("Checking if we can return via external code")
+		candidate_states = [*simgr.unconstrained, *simgr.deadended, *(r.state for r in simgr.errored)]
+		for state in candidate_states:
+			if not state.regs.sp.concrete:
+				continue
+			sp = state.solver.eval(state.regs.sp)
+			ret_val = state.memory.load(sp, state.arch.bytes, endness=state.arch.memory_endness)
+			if ret_val.concrete and state.solver.eval(ret_val) == blk.address:
+				logger.debug("Callee at 0x%04x appears to delegate return via external code, treating as returning", callee_bblock.address)
+				potentially_returning = True
+				break
+		if potentially_returning:
+			continue
+
 		_basic_to_data_block(exec_seg, blk)
 	digraph_data_identification_disjoint(exec_seg)
 
