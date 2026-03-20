@@ -316,7 +316,7 @@ def main(args=None, input_data=None, printer=None):
 
 	instruction_count = len(exec_seg.instructions)
 	printer.print_status("Total instructions: {0:,}".format(instruction_count))
-	if False:# args.analyze:
+	if args.analyze:
 		permutation_count = exec_seg.permutation_count()
 		printer.print_status("Possible permutations: {0:,}".format(permutation_count))
 		score = math.log(permutation_count, math.factorial(instruction_count))

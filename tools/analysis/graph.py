@@ -55,7 +55,7 @@ architectures = utilities.architectures
 EPILOG = """\
 graph type choices:
   graphml   the GraphML format (extension: .graphml)
-  graphviz  the GraphViz DOT format (extension: .gv)
+  graphviz  the GraphViz DOT format (extension: .dot)
 
 Generate a graph after analyzing the input file.
 
@@ -91,6 +91,12 @@ def main():
 	forward_args = []
 	forward_args.extend(['--arch', args.arch])
 	forward_args.extend(['--format', 'raw'])
+	if not args.analyze:
+		forward_args.append('--skip-analysis')
+	if not args.show_banner:
+		forward_args.append('--skip-banner')
+	if not args.permutation:
+		forward_args.append('--skip-permutation')
 	forward_args.extend([args.input.name])
 	exec_seg = cli.main(forward_args)
 
