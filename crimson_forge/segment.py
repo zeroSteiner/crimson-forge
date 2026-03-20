@@ -103,7 +103,7 @@ class BlocksDiGraph(base.DiGraphBase):
 	def _graphml_node_attributes(self, blk):
 		attributes = {'address': "0x{:04x}".format(blk.address)}
 		if isinstance(blk, block.BasicBlock):
-			attributes['type'] = 'block'
+			attributes['type'] = 'instructions-graph'
 		elif isinstance(blk, block.DataBlock):
 			attributes['type'] = 'data'
 			attributes['data.hex'] = blk.bytes_hex.decode()

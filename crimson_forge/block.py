@@ -198,7 +198,7 @@ class InstructionsDiGraph(base.DiGraphBase):
 
 	def _graphml_graph_attributes(self):
 		address = next(iter(self._instructions.keys()))  # use the address of the first instruction
-		return {'address': "0x{:04x}".format(address), 'type': 'block'}
+		return {'address': "0x{:04x}".format(address), 'type': 'instructions'}
 
 	def _graphml_node_attributes(self, ins):
 		attributes = {
