@@ -38,6 +38,7 @@ import random
 
 import crimson_forge.assembler as assembler
 import crimson_forge.base as base
+import crimson_forge.instruction as instruction
 import crimson_forge.ir as ir
 import crimson_forge.source as source
 import crimson_forge.ssa as ssa
@@ -159,6 +160,33 @@ class InstructionsDiGraph(base.DiGraphBase):
 				for pos in range(idx + 1, len(t_instructions)):
 					o_ins = t_instructions[pos]
 					if o_ins.dirty or reg.in_iterable(o_ins.registers.modified):
+						constraints[o_ins].append(ins)
+						break
+
+		# memory dependency edges (RAW, WAR, WAW) using base+offset aliasing.
+		# may_alias falls back to "alias" for unresolved or different-base addresses,
+		# so correctness is preserved when the analysis can't prove non-aliasing.
+		for idx, ins in enumerate(t_instructions):
+			for read in ins.memory_reads:
+				# RAW: most recent aliasing prior write
+				for pos in reversed(range(0, idx)):
+					o_ins = t_instructions[pos]
+					if any(instruction.may_alias(read, write) for write in o_ins.memory_writes):
+						constraints[ins].append(o_ins)
+						break
+				# WAR: next aliasing write must come after this read
+				for pos in range(idx + 1, len(t_instructions)):
+					o_ins = t_instructions[pos]
+					if any(instruction.may_alias(read, write) for write in o_ins.memory_writes):
+						constraints[o_ins].append(ins)
+						break
+
+		for idx, ins in enumerate(t_instructions):
+			for write in ins.memory_writes:
+				# WAW: next aliasing write must come after this write
+				for pos in range(idx + 1, len(t_instructions)):
+					o_ins = t_instructions[pos]
+					if any(instruction.may_alias(write, o_write) for o_write in o_ins.memory_writes):
 						constraints[o_ins].append(ins)
 						break
 

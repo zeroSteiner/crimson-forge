@@ -36,6 +36,7 @@ import functools
 import logging
 import re
 import sys
+import typing
 
 import crimson_forge.assembler as assembler
 import crimson_forge.ir as ir
@@ -96,6 +97,32 @@ def register_postprocessor(*architectures, byte_mask=None, mnemonic=None):
 	return decorator
 
 _InstructionRegisters = collections.namedtuple('InstructionRegisters', ('accessed', 'modified', 'stored'))
+
+class AddressExpr(typing.NamedTuple):
+	# base=None means an absolute (RIP-relative or literal) address. offset is signed.
+	base: typing.Optional['ir.IRRegister']
+	offset: int
+
+class MemoryAccess(typing.NamedTuple):
+	# A None for either field means the analysis couldn't determine that field
+	# and the access must be assumed to alias every other memory operation.
+	address: typing.Optional[AddressExpr]
+	size: typing.Optional[int]
+
+def _signed(value: int, width_bits: int) -> int:
+	if value & (1 << (width_bits - 1)):
+		return value - (1 << width_bits)
+	return value
+
+def may_alias(a: MemoryAccess, b: MemoryAccess) -> bool:
+	if a.address is None or b.address is None:
+		return True
+	if a.size is None or b.size is None:
+		return True
+	if a.address.base != b.address.base:
+		return True
+	return not (a.address.offset + a.size <= b.address.offset or b.address.offset + b.size <= a.address.offset)
+
 # hashable
 class Instruction(object):
 	_regex_jmp = re.compile(r'^(?P<jump>(call|j[\S]{1,4}|loop(n?e)?))\s+0x(?P<location>[a-f0-9]+)' + source.REGEX_INSTRUCTION_END)
@@ -108,8 +135,11 @@ class Instruction(object):
 		self._jmp_reference = None
 
 		self.registers = _InstructionRegisters(set(), set(), set())
+		self.memory_reads: typing.List[MemoryAccess] = []
+		self.memory_writes: typing.List[MemoryAccess] = []
 		vex_statements = self._fixup_vex_stmts(vex_statements.copy())
 		taint_tracking = {}
+		addr_exprs: typing.Dict[int, AddressExpr] = {}
 		for stmt in vex_statements:
 			if isinstance(stmt, pyvex.stmt.AbiHint):
 				pass
@@ -118,8 +148,13 @@ class Instruction(object):
 				if not (stmt.oldHi == 0xffffffff or stmt.expdHi is None):
 					# double element
 					taint_tracking[stmt.oldHi] = taint_tracking[stmt.dataHi.tmp] | taint_tracking[stmt.expdHi.tmp]
+				self.memory_reads.append(MemoryAccess(None, None))
+				self.memory_writes.append(MemoryAccess(None, None))
 			elif isinstance(stmt, pyvex.stmt.Dirty):
 				self.dirty = True
+				# dirty helpers are opaque side effects; assume they may touch any memory
+				self.memory_reads.append(MemoryAccess(None, None))
+				self.memory_writes.append(MemoryAccess(None, None))
 				# handle dirty statements on a case-by-case basis
 				if stmt.cee.name in ('amd64g_dirtyhelper_FSTENV', 'x86g_dirtyhelper_FSTENV'):
 					logger.info('Encountered handled dirty IR statement: ' + stmt.cee.name)
@@ -139,6 +174,9 @@ class Instruction(object):
 			elif isinstance(stmt, pyvex.stmt.PutI):
 				self.registers.modified.add(ir.IRRegister.from_ir_stmt_puti(arch, stmt, ir_tyenv))
 			elif isinstance(stmt, pyvex.stmt.Store):
+				addr_expr = self._resolve_addr(stmt.addr, addr_exprs)
+				store_size = self._mem_op_size(stmt.data, ir_tyenv)
+				self.memory_writes.append(MemoryAccess(addr_expr, store_size))
 				if isinstance(stmt.data, pyvex.expr.Const):
 					pass
 				elif isinstance(stmt.data, pyvex.expr.RdTmp):
@@ -152,10 +190,25 @@ class Instruction(object):
 					register = ir.IRRegister.from_ir_expr_get(arch, stmt.data, ir_tyenv)
 					self.registers.accessed.add(register)
 					taint_tracking[stmt.tmp] = set((register,))
+					addr_exprs[stmt.tmp] = AddressExpr(register, 0)
 				elif isinstance(stmt.data, pyvex.expr.GetI):
 					register = ir.IRRegister.from_ir_expr_geti(arch, stmt.data, ir_tyenv)
 					self.registers.accessed.add(register)
 					taint_tracking[stmt.tmp] = set((register,))
+				elif isinstance(stmt.data, pyvex.expr.Load):
+					addr_expr = self._resolve_addr(stmt.data.addr, addr_exprs)
+					load_size = stmt.data.result_size(ir_tyenv) // 8
+					self.memory_reads.append(MemoryAccess(addr_expr, load_size))
+					# the loaded value has no register source — it comes from memory
+					taint_tracking[stmt.tmp] = set()
+				elif isinstance(stmt.data, pyvex.expr.RdTmp):
+					# straight copy: propagate taint and address expression through
+					taint_tracking[stmt.tmp] = set(taint_tracking[stmt.data.tmp])
+					if stmt.data.tmp in addr_exprs:
+						addr_exprs[stmt.tmp] = addr_exprs[stmt.data.tmp]
+				elif isinstance(stmt.data, pyvex.expr.Const):
+					taint_tracking[stmt.tmp] = set()
+					addr_exprs[stmt.tmp] = AddressExpr(None, _signed(stmt.data.con.value, stmt.data.con.size))
 				else:
 					tainted = set()
 					for arg in getattr(stmt.data, 'args', []):
@@ -163,10 +216,56 @@ class Instruction(object):
 							continue
 						tainted.update(taint_tracking[arg.tmp])
 					taint_tracking[stmt.tmp] = tainted
+					derived = self._derive_addr_expr(stmt.data, addr_exprs)
+					if derived is not None:
+						addr_exprs[stmt.tmp] = derived
 			else:
 				raise TaintTrackingError('unsupported IR statement: ' + stmt.__class__.__name__)
 		for postprocessor in postprocessors[self.arch.name]:
 			postprocessor(self)
+
+	@staticmethod
+	def _resolve_addr(addr_expr_node, addr_exprs):
+		if isinstance(addr_expr_node, pyvex.expr.RdTmp):
+			return addr_exprs.get(addr_expr_node.tmp)
+		if isinstance(addr_expr_node, pyvex.expr.Const):
+			return AddressExpr(None, _signed(addr_expr_node.con.value, addr_expr_node.con.size))
+		return None
+
+	@staticmethod
+	def _mem_op_size(data_node, ir_tyenv):
+		if isinstance(data_node, pyvex.expr.Const):
+			return data_node.con.size // 8
+		if isinstance(data_node, pyvex.expr.RdTmp):
+			return ir_tyenv.sizeof(data_node.tmp) // 8
+		return None
+
+	@staticmethod
+	def _derive_addr_expr(data_node, addr_exprs):
+		# only handle Add/Sub of (RdTmp_with_addr_expr, Const)
+		if not isinstance(data_node, pyvex.expr.Binop):
+			return None
+		if data_node.op not in ('Iop_Add64', 'Iop_Sub64', 'Iop_Add32', 'Iop_Sub32'):
+			return None
+		args = data_node.args
+		if len(args) != 2:
+			return None
+		# normalise so a is the RdTmp side, b is the Const side
+		a, b = args
+		if isinstance(a, pyvex.expr.Const) and isinstance(b, pyvex.expr.RdTmp):
+			# Sub is non-commutative, so the (Const, RdTmp) form only works for Add
+			if data_node.op not in ('Iop_Add64', 'Iop_Add32'):
+				return None
+			a, b = b, a
+		if not (isinstance(a, pyvex.expr.RdTmp) and isinstance(b, pyvex.expr.Const)):
+			return None
+		base_expr = addr_exprs.get(a.tmp)
+		if base_expr is None:
+			return None
+		delta = _signed(b.con.value, b.con.size)
+		if data_node.op in ('Iop_Sub64', 'Iop_Sub32'):
+			delta = -delta
+		return AddressExpr(base_expr.base, base_expr.offset + delta)
 
 	def __bytes__(self):
 		return bytes(self.cs_instruction.bytes)
