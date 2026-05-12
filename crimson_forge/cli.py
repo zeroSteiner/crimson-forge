@@ -40,6 +40,8 @@ import logging
 import math
 import os
 import random
+import threading
+import time
 
 import crimson_forge
 import crimson_forge.analysis
@@ -187,6 +189,22 @@ def _handle_output_file(args, arch, format):
 	with open(output_path, 'wb') as file_h:
 		yield file_h
 
+@contextlib.contextmanager
+def _warn_if_slow(printer, message, *, timeout=30):
+	finished = threading.Event()
+
+	def timer():
+		if not finished.wait(timeout):
+			printer.print_warning(message)
+
+	t = threading.Thread(target=timer, daemon=True)
+	t.start()
+
+	try:
+		yield
+	finally:
+		finished.set()
+
 class AppendOverrideDefaultAction(argparse.Action):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
@@ -317,10 +335,11 @@ def main(args=None, input_data=None, printer=None):
 	instruction_count = len(exec_seg.instructions)
 	printer.print_status("Total instructions: {0:,}".format(instruction_count))
 	if args.analyze:
-		permutation_count = exec_seg.permutation_count()
-		printer.print_status("Possible permutations: {0:,}".format(permutation_count))
-		score = math.log(permutation_count, math.factorial(instruction_count))
-		printer.print_status("Randomization potential score: {0:0.5f}".format(score))
+		with _warn_if_slow(printer, "Analysis phase is running long, disable with --skip-analysis"):
+			permutation_count = exec_seg.permutation_count()
+			printer.print_status("Possible permutations: {0:,}".format(permutation_count))
+			score = math.log(permutation_count, math.factorial(instruction_count))
+			printer.print_status("Randomization potential score: {0:0.5f}".format(score))
 
 	if args.output:
 		if args.permutation:
